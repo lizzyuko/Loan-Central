@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ClockCounterClockwise, Files, FileText, Package, SignOut, SquaresFour, UsersThree } from "@phosphor-icons/react/ssr";
+import { Bank, ClockCounterClockwise, EnvelopeSimple, Files, FileText, Gear, Package, SignOut, SquaresFour, UsersThree } from "@phosphor-icons/react/ssr";
 import { Logo } from "@/components/ui/Logo";
 import { ROLE_LABELS, hasPermission } from "@/lib/auth/permissions";
 import type { CurrentAdmin } from "@/lib/auth/admin";
@@ -12,10 +12,13 @@ export function AdminShell({ admin, children }: { admin: CurrentAdmin; children:
   const nav = [
     { href: "/admin/dashboard", label: "Dashboard", icon: <SquaresFour size={18} />, show: true },
     { href: "/admin/applications", label: "Applications", icon: <Files size={18} />, show: true },
-  ];
+    { href: "/admin/loans", label: "Loans", icon: <Bank size={18} />, show: hasPermission(admin.role, "loans.manage") },
+  ].filter((i) => i.show);
   const settings = [
     { href: "/admin/settings/products", label: "Loan products", icon: <Package size={18} />, show: hasPermission(admin.role, "products.manage") },
     { href: "/admin/settings/documents", label: "Document types", icon: <FileText size={18} />, show: hasPermission(admin.role, "documents.configure") },
+    { href: "/admin/settings/email", label: "Email", icon: <EnvelopeSimple size={18} />, show: hasPermission(admin.role, "settings.manage") },
+    { href: "/admin/settings/loans", label: "Loan settings", icon: <Gear size={18} />, show: hasPermission(admin.role, "settings.manage") },
     { href: "/admin/settings/admins", label: "Administrators", icon: <UsersThree size={18} />, show: hasPermission(admin.role, "admins.manage") },
     { href: "/admin/audit", label: "Audit log", icon: <ClockCounterClockwise size={18} />, show: hasPermission(admin.role, "audit.view") },
   ].filter((i) => i.show);

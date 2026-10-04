@@ -22,6 +22,7 @@ import { DEFAULT_DOCUMENT_TYPES } from "../src/config/documents";
 import { toMonthlyIncome } from "../src/lib/application/income";
 import { generateReference } from "../src/lib/application/reference";
 import { hashPassword, newPasswordSchema } from "../src/lib/auth/password";
+import { allocatePayments, buildFlatSchedule, toIsoDate } from "../src/lib/loans/schedule";
 import type { ApplicationStatus, EmploymentStatus, IncomeFrequency } from "../src/db/schema/enums";
 
 config({ path: ".env.local" });
@@ -31,6 +32,55 @@ const DEV = process.argv.includes("--dev");
 const DEV_PASSWORD = "loan-central-dev-only";
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
+
+/**
+ * Development only: one active loan (James Whitfield) with the first
+ * instalment paid and the second overdue, to exercise loans and reminders.
+ */
+async function seedSampleLoan(db: Db): Promise<void> {
+  const [app] = await db
+    .select({ id: schema.applications.id, applicantId: schema.applications.applicantId })
+    .from(schema.applications)
+    .innerJoin(schema.applicants, eq(schema.applicants.id, schema.applications.applicantId))
+    .where(eq(schema.applicants.email, "james.whitfield@example.com"))
+    .limit(1);
+  if (!app) return;
+  const existing = await db.select({ id: schema.loans.id }).from(schema.loans).where(eq(schema.loans.applicationId, app.id)).limit(1);
+  if (existing.length > 0) return;
+
+  const day = 86_400_000;
+  const firstDue = toIsoDate(new Date(Date.now() - 40 * day));
+  const schedule = buildFlatSchedule({ principal: "75000", annualRatePct: 9, termMonths: 12, frequency: "MONTHLY", firstDueDate: firstDue });
+  await db.transaction(async (tx) => {
+    await tx.update(schema.applications).set({ status: "APPROVED" }).where(eq(schema.applications.id, app.id));
+    const [loan] = await tx
+      .insert(schema.loans)
+      .values({
+        applicationId: app.id,
+        applicantId: app.applicantId,
+        status: "ACTIVE",
+        principal: "75000",
+        currency: "GBP",
+        interestRate: "9",
+        totalInterest: schedule.totalInterest,
+        totalRepayable: schedule.totalRepayable,
+        termMonths: 12,
+        repaymentFrequency: "MONTHLY",
+        installmentCount: schedule.installmentCount,
+        firstDueDate: firstDue,
+        approvedAt: new Date(Date.now() - 55 * day),
+        disbursedAt: new Date(Date.now() - 50 * day),
+      })
+      .returning({ id: schema.loans.id });
+    const first = schedule.installments[0]!;
+    const alloc = allocatePayments(schedule.installments.map((i) => i.amountDue), first.amountDue)!;
+    await tx.insert(schema.loanInstallments).values(
+      schedule.installments.map((i, idx) => ({ ...i, loanId: loan!.id, amountPaid: alloc[idx]!.amountPaid, status: alloc[idx]!.status, paidAt: alloc[idx]!.status === "PAID" ? new Date(Date.now() - 39 * day) : null })),
+    );
+    await tx.insert(schema.loanPayments).values({ loanId: loan!.id, amount: first.amountDue, paidOn: toIsoDate(new Date(Date.now() - 39 * day)), method: "bank_transfer", reference: "SAMPLE-001" });
+    await tx.insert(schema.applicationEvents).values({ applicationId: app.id, type: "loan.approved", summary: "Loan approved (sample data)", actorType: "SYSTEM" });
+  });
+}
 
 /** Creates (or activates) the first super admin from SEED_ADMIN_* variables. */
 async function seedSuperAdmin(db: Db): Promise<string> {
@@ -243,6 +293,7 @@ async function main() {
       });
       created++;
     }
+    await seedSampleLoan(db);
     console.log(`Development data ready (${created} new sample applications, demo admins super.admin@loancentral.test / reviewer@loancentral.test, password "${DEV_PASSWORD}").`);
   } finally {
     await client.end();

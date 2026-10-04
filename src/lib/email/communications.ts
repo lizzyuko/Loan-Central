@@ -55,6 +55,7 @@ export async function sendAndRecord(input: SendAndRecordInput): Promise<SendResu
         .update(communications)
         .set({
           deliveryStatus: result.status,
+          provider: result.provider ?? null,
           providerMessageId: result.providerMessageId ?? null,
           errorCode: result.errorCode ?? null,
         })

@@ -381,4 +381,67 @@ describe.skipIf(!RUN)("integration", async () => {
     expect(sent.some((s) => s.text.includes("DE89"))).toBe(false);
     expect(cookieJar.size).toBeGreaterThan(0);
   });
+
+  it("runs the loan lifecycle: approve, disburse, pay, remind, repay, void", async () => {
+    const loans = await import("@/lib/loans/service");
+    const { toIsoDate } = await import("@/lib/loans/schedule");
+    const app = (await submit()).created!;
+    await db.update(schema.applications).set({ status: "FINAL_REVIEW" }).where(eq(schema.applications.id, app.id));
+    const reviewer = await makeAdmin("ADMIN");
+    const admin = { id: reviewer.id, email: reviewer.email, name: reviewer.name, role: reviewer.role, sessionId: "s" };
+    const today = toIsoDate(new Date());
+
+    // Approval creates the loan and schedule: 1,200 at 10% flat for 12 months = 1,320 over 12 x 110.
+    const approved = await loans.approveLoan(admin, {
+      applicationId: app.id, principal: "1200", currency: "GBP", annualRatePct: 10, termMonths: 12, frequency: "MONTHLY", firstDueDate: today, message: undefined, notify: true,
+    });
+    expect(approved.ok).toBe(true);
+    const detail = (await loans.getLoanByApplication(app.id))!;
+    expect(detail.loan.totalRepayable).toBe("1320.00");
+    expect(detail.installments).toHaveLength(12);
+    expect(detail.installments[0]!.amountDue).toBe("110.00");
+    const [appRow] = await db.select().from(schema.applications).where(eq(schema.applications.id, app.id));
+    expect(appRow!.status).toBe("APPROVED");
+    expect(sent.some((m) => m.subject.includes("approved"))).toBe(true);
+
+    // Applicants only see their own loan.
+    expect(await loans.getApplicantLoan(crypto.randomUUID(), app.id)).toBeNull();
+    expect(await loans.getApplicantLoan(app.applicantId, app.id)).not.toBeNull();
+
+    // No payments or reminders before disbursement.
+    expect((await loans.recordPayment(admin, { loanId: detail.loan.id, amount: "10", paidOn: today, method: "cash", reference: undefined, note: undefined, notify: false })).ok).toBe(false);
+    expect((await loans.runPaymentReminders(today)).sent).toBe(0);
+
+    expect((await loans.markDisbursed(admin, detail.loan.id, today)).ok).toBe(true);
+
+    // Due-today reminder goes out once.
+    sent.length = 0;
+    expect((await loans.runPaymentReminders(today)).sent).toBe(1);
+    expect((await loans.runPaymentReminders(today)).sent).toBe(0);
+    expect(sent).toHaveLength(1);
+
+    // Partial payment, overpayment rejected, then full repayment completes the application.
+    expect((await loans.recordPayment(admin, { loanId: detail.loan.id, amount: "150", paidOn: today, method: "bank_transfer", reference: undefined, note: undefined, notify: true })).ok).toBe(true);
+    let d = (await loans.getLoanByApplication(app.id))!;
+    expect(d.installments[0]!.status).toBe("PAID");
+    expect(d.installments[1]!.status).toBe("PARTIAL");
+    expect(d.summary.outstanding).toBe("1170.00");
+    expect((await loans.recordPayment(admin, { loanId: detail.loan.id, amount: "5000", paidOn: today, method: "bank_transfer", reference: undefined, note: undefined, notify: false })).ok).toBe(false);
+
+    expect((await loans.recordPayment(admin, { loanId: detail.loan.id, amount: "1170", paidOn: today, method: "bank_transfer", reference: undefined, note: undefined, notify: true })).ok).toBe(true);
+    d = (await loans.getLoanByApplication(app.id))!;
+    expect(d.loan.status).toBe("PAID_OFF");
+    const [done] = await db.select().from(schema.applications).where(eq(schema.applications.id, app.id));
+    expect(done!.status).toBe("COMPLETED");
+
+    // Voiding a payment re-opens the loan.
+    const last = d.payments.find((p) => p.amount === "1170.00")!;
+    expect((await loans.voidPayment(admin, last.id, "Entered twice")).ok).toBe(true);
+    d = (await loans.getLoanByApplication(app.id))!;
+    expect(d.loan.status).toBe("ACTIVE");
+    expect(d.summary.outstanding).toBe("1170.00");
+    const [reopened] = await db.select().from(schema.applications).where(eq(schema.applications.id, app.id));
+    expect(reopened!.status).toBe("APPROVED");
+  });
+
 });

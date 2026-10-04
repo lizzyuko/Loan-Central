@@ -11,7 +11,9 @@ export const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationS
   ELIGIBLE: ["ACCOUNT_DETAILS_REQUESTED", "UNDER_REVIEW", "NOT_ELIGIBLE"],
   NOT_ELIGIBLE: ["UNDER_REVIEW"],
   ACCOUNT_DETAILS_REQUESTED: ["FINAL_REVIEW", "UNDER_REVIEW"],
-  FINAL_REVIEW: ["COMPLETED", "ACCOUNT_DETAILS_REQUESTED", "NOT_ELIGIBLE"],
+  FINAL_REVIEW: ["APPROVED", "ACCOUNT_DETAILS_REQUESTED", "NOT_ELIGIBLE"],
+  // APPROVED → COMPLETED happens automatically when the loan is repaid (or by an admin).
+  APPROVED: ["COMPLETED"],
   COMPLETED: [],
 };
 
@@ -25,6 +27,7 @@ export const WORKFLOW_ONLY_TARGETS: readonly ApplicationStatus[] = [
   "ELIGIBLE",
   "NOT_ELIGIBLE",
   "ACCOUNT_DETAILS_REQUESTED",
+  "APPROVED",
 ];
 
 export function canTransition(from: ApplicationStatus, to: ApplicationStatus): boolean {
@@ -50,6 +53,7 @@ export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   NOT_ELIGIBLE: "Not eligible",
   ACCOUNT_DETAILS_REQUESTED: "Account details requested",
   FINAL_REVIEW: "Final review",
+  APPROVED: "Approved",
   COMPLETED: "Completed",
 };
 
@@ -63,6 +67,7 @@ export const STATUS_TONES: Record<ApplicationStatus, StatusTone> = {
   NOT_ELIGIBLE: "danger",
   ACCOUNT_DETAILS_REQUESTED: "info",
   FINAL_REVIEW: "info",
+  APPROVED: "success",
   COMPLETED: "success",
 };
 
@@ -82,6 +87,7 @@ const STEP_LABELS = [
   ["eligibility", "Eligibility review"],
   ["account", "Account information"],
   ["final", "Final review"],
+  ["approved", "Loan approved"],
 ] as const;
 
 /** Index of the step currently in progress for each status. */
@@ -93,7 +99,8 @@ const CURRENT_STEP: Record<ApplicationStatus, number> = {
   NOT_ELIGIBLE: 2,
   ACCOUNT_DETAILS_REQUESTED: 3,
   FINAL_REVIEW: 4,
-  COMPLETED: 5,
+  APPROVED: 6,
+  COMPLETED: 6,
 };
 
 export function applicantProgress(status: ApplicationStatus): ProgressStep[] {
@@ -116,5 +123,6 @@ export const APPLICANT_STATUS_COPY: Record<ApplicationStatus, string> = {
   NOT_ELIGIBLE: "After careful review, we're unable to move forward with this application at this time.",
   ACCOUNT_DETAILS_REQUESTED: "Your application has progressed to the next stage. Please provide the requested account information.",
   FINAL_REVIEW: "Thank you. Your application is in final review. We'll contact you with the outcome.",
-  COMPLETED: "Your application process is complete. Thank you for choosing Loan Central.",
+  APPROVED: "Congratulations, your loan has been approved. Your repayment schedule is below.",
+  COMPLETED: "Your loan has been repaid in full. Thank you for choosing Loan Central.",
 };

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ApplicationTable } from "@/components/admin/ApplicationTable";
 import { Alert } from "@/components/ui/Feedback";
-import { requireAdminPage } from "@/lib/auth/admin";
+import { can, requireAdminPage } from "@/lib/auth/admin";
+import { getLoanCounts } from "@/lib/loans/service";
 import { getStatusCounts, getSubmittedInLastDays, listApplications } from "@/lib/admin/queries";
 import type { ApplicationStatus } from "@/db/schema/enums";
 import styles from "@/components/admin/admin.module.css";
@@ -12,7 +13,13 @@ export const metadata: Metadata = { title: "Dashboard" };
 export default async function DashboardPage({ searchParams }: PageProps<"/admin/dashboard">) {
   const admin = await requireAdminPage();
   const params = await searchParams;
-  const [counts, newThisWeek, recent] = await Promise.all([getStatusCounts(), getSubmittedInLastDays(7), listApplications({ sort: "submitted", dir: "desc" })]);
+  const showLoans = can(admin, "loans.manage");
+  const [counts, newThisWeek, recent, loanCounts] = await Promise.all([
+    getStatusCounts(),
+    getSubmittedInLastDays(7),
+    listApplications({ sort: "submitted", dir: "desc" }),
+    showLoans ? getLoanCounts() : Promise.resolve(null),
+  ]);
 
   const cards: { label: string; value: number; status?: ApplicationStatus }[] = [
     { label: "Total applications", value: counts.total },
@@ -22,8 +29,18 @@ export default async function DashboardPage({ searchParams }: PageProps<"/admin/
     { label: "Potentially eligible", value: counts.ELIGIBLE + counts.ACCOUNT_DETAILS_REQUESTED, status: "ELIGIBLE" },
     { label: "Not eligible", value: counts.NOT_ELIGIBLE, status: "NOT_ELIGIBLE" },
     { label: "Final review", value: counts.FINAL_REVIEW, status: "FINAL_REVIEW" },
+    { label: "Approved", value: counts.APPROVED, status: "APPROVED" },
     { label: "Completed", value: counts.COMPLETED, status: "COMPLETED" },
   ];
+
+  const loanCards = loanCounts
+    ? [
+        { label: "Active loans", value: loanCounts.active, filter: "active" },
+        { label: "Due in 7 days", value: loanCounts.dueSoon, filter: "due_soon" },
+        { label: "Overdue loans", value: loanCounts.overdue, filter: "overdue" },
+        { label: "Awaiting disbursement", value: loanCounts.pending, filter: "pending" },
+      ]
+    : [];
 
   return (
     <>
@@ -55,6 +72,20 @@ export default async function DashboardPage({ searchParams }: PageProps<"/admin/
           ),
         )}
       </div>
+
+      {loanCards.length > 0 && (
+        <>
+          <h2 className={styles.sectionLabel}>Loans</h2>
+          <div className={styles.stats}>
+            {loanCards.map((c) => (
+              <Link key={c.label} href={`/admin/loans?filter=${c.filter}`} className={styles.stat}>
+                <span className={styles.statLabel}>{c.label}</span>
+                <span className={styles.statValue}>{c.value.toLocaleString("en")}</span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
 
       <section className={styles.panel}>
         <div className={styles.panelHead}>

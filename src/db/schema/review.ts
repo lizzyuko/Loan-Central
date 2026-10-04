@@ -145,6 +145,8 @@ export const communications = pgTable(
     body: text("body"),
     visibleToApplicant: boolean("visible_to_applicant").notNull().default(false),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    /** Which email provider delivered it (resend | zoho). */
+    provider: text("provider"),
     providerMessageId: text("provider_message_id"),
     deliveryStatus: deliveryStatusEnum("delivery_status").notNull().default("QUEUED"),
     errorCode: text("error_code"),

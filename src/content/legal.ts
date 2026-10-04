@@ -30,7 +30,7 @@ const contact = siteConfig.supportEmail;
 
 /** Short disclosure used in the footer, wizard and emails. */
 export const LOAN_DISCLAIMER =
-  "Loan Central provides a pre-qualification and application review service. Submitting an application does not guarantee approval or a loan offer. Any eligibility update is an initial assessment, not a binding commitment to lend. Terms, availability and requirements vary by country.";
+  "Loan Central reviews loan applications. Submitting an application does not guarantee approval or a loan offer. An eligibility update is an initial assessment, not a commitment to lend; only a final approval that states the loan terms is an offer of credit. Terms, availability and requirements vary by country.";
 
 export const LEGAL_DOCUMENTS: Record<LegalSlug, LegalDocument> = {
   terms: {
@@ -129,10 +129,17 @@ export const LEGAL_DOCUMENTS: Record<LegalSlug, LegalDocument> = {
     slug: "disclaimer",
     title: "Loan Disclosure",
     description: "Important information about what a Loan Central eligibility update means.",
-    version: "2026-10-01",
-    updated: "1 October 2026",
+    version: "2026-10-05",
+    updated: "5 October 2026",
     sections: [
-      { heading: "Pre-qualification only", paragraphs: [LOAN_DISCLAIMER] },
+      { heading: "Applications and eligibility", paragraphs: [LOAN_DISCLAIMER] },
+      {
+        heading: "Approved loans",
+        paragraphs: [
+          "If your application is approved, we will tell you the approved amount, interest rate, total amount repayable and repayment schedule in writing (by email and in your applicant portal). Those terms apply to your loan.",
+          "Interest is calculated at a flat rate per year on the approved amount for the full term. Repayments are due on the dates shown in your schedule. We send reminders before payments are due, but you remain responsible for paying on time.",
+        ],
+      },
       {
         heading: "No guarantee",
         paragraphs: [

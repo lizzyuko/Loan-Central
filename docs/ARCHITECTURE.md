@@ -10,7 +10,7 @@ Priority order for every decision: **Security → Correctness → Maintainabilit
 | Styling | CSS Modules + global design tokens (`src/styles/tokens.css`) | No Tailwind |
 | Forms | React Hook Form + Zod 4 | Same Zod schema runs client- and server-side |
 | Database | Neon Postgres via `postgres` (postgres-js) + Drizzle ORM | Pooled connection string, `prepare: false` |
-| Email | Resend | HTML templates built in `src/lib/email/templates` |
+| Email | Resend API or Zoho Mail SMTP (`nodemailer`), chosen in Settings → Email, with optional automatic fallback | Credentials encrypted in `system_settings`; templates in `src/lib/email/templates` |
 | Files | Cloudinary, `type: "authenticated"` (private) assets | Signed direct uploads, short-lived signed download URLs |
 | Bot protection | Cloudflare Turnstile | Server-side `siteverify` on every protected action |
 | Rate limiting | Postgres fixed-window counters (`rate_limits` table) | No extra service; fails closed |
@@ -139,3 +139,16 @@ src/
   types/
 proxy.ts
 ```
+
+## 11. Loans
+
+- **Tables:** `loans` (terms fixed at approval), `loan_installments` (schedule), `loan_payments` (admin-recorded; voided payments are kept), `loan_reminders` (unique per instalment and kind, so a reminder can only be sent once).
+- **Maths** (`src/lib/loans/schedule.ts`, pure and unit-tested):
+  - total interest = principal × annual rate × term/12, on the original principal
+  - instalments are split evenly in integer cents, and the last one absorbs any rounding
+- **Payments:** after every payment or void, all non-voided payments are re-applied to instalments, oldest first. This keeps balances correct and refuses overpayments.
+- **Statuses:**
+  - Application: FINAL_REVIEW → APPROVED (the loan is created) → COMPLETED (automatically once repaid).
+  - Loan: PENDING_DISBURSEMENT → ACTIVE → PAID_OFF. "Overdue" is worked out from the instalments rather than stored.
+- **Reminders:** `/api/cron/reminders` runs daily. It claims a `loan_reminders` row before sending, and releases it if the email fails so the next run retries.
+- **Permissions:** `loans.manage` (approve, disburse, record payments) is held by both roles. `payments.void` is super admin only.

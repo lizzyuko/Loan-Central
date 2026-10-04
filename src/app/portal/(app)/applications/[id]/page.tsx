@@ -6,6 +6,9 @@ import { StatusBadge } from "@/components/application/StatusBadge";
 import { AccountDetailsForm } from "@/components/portal/AccountDetailsForm";
 import { InfoRequestResponse } from "@/components/portal/InfoRequestResponse";
 import { ProgressTracker } from "@/components/portal/ProgressTracker";
+import { PortalLoan } from "@/components/portal/PortalLoan";
+import { getApplicantLoan } from "@/lib/loans/service";
+import { getLoanSettings } from "@/lib/loans/settings";
 import { Alert } from "@/components/ui/Feedback";
 import { getCountry } from "@/config/countries";
 import { formatMoney } from "@/config/currencies";
@@ -29,7 +32,13 @@ export default async function PortalApplicationPage({ params }: PageProps<"/port
   const app = await getPortalApplication(applicant.id, id);
   if (!app) notFound();
 
-  const others = (await listApplicantApplications(applicant.id)).length > 1;
+  const hasLoan = app.status === "APPROVED" || app.status === "COMPLETED";
+  const [all, loan, loanSettings] = await Promise.all([
+    listApplicantApplications(applicant.id),
+    hasLoan ? getApplicantLoan(applicant.id, app.id) : Promise.resolve(null),
+    hasLoan ? getLoanSettings() : Promise.resolve(null),
+  ]);
+  const others = all.length > 1;
   const purpose = LOAN_PURPOSES.find((p) => p.value === app.purpose)?.label ?? app.purpose;
 
   let residence = "";
@@ -59,6 +68,8 @@ export default async function PortalApplicationPage({ params }: PageProps<"/port
         <p className={styles.statusCopy}>{APPLICANT_STATUS_COPY[app.status]}</p>
         <ProgressTracker status={app.status} />
       </section>
+
+      {loan && <PortalLoan data={loan} instructions={loanSettings?.repaymentInstructions ?? ""} />}
 
       {app.openRequest && (
         <section className={styles.card} aria-labelledby="request-title">

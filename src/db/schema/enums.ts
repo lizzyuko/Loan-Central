@@ -8,6 +8,7 @@ export const APPLICATION_STATUSES = [
   "NOT_ELIGIBLE",
   "ACCOUNT_DETAILS_REQUESTED",
   "FINAL_REVIEW",
+  "APPROVED",
   "COMPLETED",
 ] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
@@ -43,6 +44,11 @@ export const COMMUNICATION_TYPES = [
   "ACCOUNT_DETAILS_REQUEST",
   "CUSTOM_MESSAGE",
   "VERIFICATION",
+  "LOAN_APPROVED",
+  "PAYMENT_RECEIVED",
+  "PAYMENT_REMINDER",
+  "PAYMENT_OVERDUE",
+  "LOAN_PAID_OFF",
 ] as const;
 export type CommunicationType = (typeof COMMUNICATION_TYPES)[number];
 
@@ -58,6 +64,15 @@ export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 export const INFO_REQUEST_STATUSES = ["OPEN", "FULFILLED", "CANCELLED"] as const;
 export type InfoRequestStatus = (typeof INFO_REQUEST_STATUSES)[number];
 
+export const LOAN_STATUSES = ["PENDING_DISBURSEMENT", "ACTIVE", "PAID_OFF", "DEFAULTED", "CANCELLED"] as const;
+export type LoanStatus = (typeof LOAN_STATUSES)[number];
+
+export const INSTALLMENT_STATUSES = ["PENDING", "PARTIAL", "PAID"] as const;
+export type InstallmentStatus = (typeof INSTALLMENT_STATUSES)[number];
+
+export const REMINDER_KINDS = ["UPCOMING", "DUE_TODAY", "OVERDUE_1", "OVERDUE_7"] as const;
+export type ReminderKind = (typeof REMINDER_KINDS)[number];
+
 export const applicationStatusEnum = pgEnum("application_status", APPLICATION_STATUSES);
 export const adminRoleEnum = pgEnum("admin_role", ADMIN_ROLES);
 export const employmentStatusEnum = pgEnum("employment_status", EMPLOYMENT_STATUSES);
@@ -68,3 +83,5 @@ export const deliveryStatusEnum = pgEnum("delivery_status", DELIVERY_STATUSES);
 export const actorTypeEnum = pgEnum("actor_type", ACTOR_TYPES);
 export const documentStatusEnum = pgEnum("document_status", DOCUMENT_STATUSES);
 export const infoRequestStatusEnum = pgEnum("info_request_status", INFO_REQUEST_STATUSES);
+export const loanStatusEnum = pgEnum("loan_status", LOAN_STATUSES);
+export const installmentStatusEnum = pgEnum("installment_status", INSTALLMENT_STATUSES);

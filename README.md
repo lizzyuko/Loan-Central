@@ -4,7 +4,7 @@ International loan pre-qualification and application platform. Applicants apply 
 
 > Loan Central provides a pre-qualification review. Submitting an application does not guarantee approval or a loan offer.
 
-- **Stack:** Next.js 16 (App Router), React 19, TypeScript (strict), CSS Modules, React Hook Form + Zod, Drizzle ORM on Neon Postgres, Resend, Cloudinary, Cloudflare Turnstile. Deployed on Vercel.
+- **Stack:** Next.js 16 (App Router), React 19, TypeScript (strict), CSS Modules, React Hook Form + Zod, Drizzle ORM on Neon Postgres, Resend and/or Zoho Mail (SMTP), Cloudinary, Cloudflare Turnstile. Deployed on Vercel.
 - **Architecture:** see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the auth model, data flow, schema and security design.
 
 ---
@@ -64,11 +64,19 @@ Document uploads need Cloudinary credentials, even locally.
 4. Run `npm run db:migrate`, then `npm run db:seed`.
 5. For integration tests, create a separate Neon **branch** and set `TEST_DATABASE_URL` to it. The tests truncate tables.
 
-### Resend (email)
+### Email (Resend and/or Zoho Mail)
 
-1. Create an account at [resend.com](https://resend.com) and **verify your sending domain** (it gives you the SPF and DKIM DNS records to add).
-2. Create an API key and set `RESEND_API_KEY`.
-3. Set `RESEND_FROM_EMAIL`, for example `Loan Central <noreply@yourdomain.com>`, using the verified domain. Optionally set `RESEND_REPLY_TO`.
+Configure email in the admin dashboard: **Settings → Email** (super admins). Pick the active provider, choose whether to fall back to the other one automatically, and use **Send test email** to check each provider. API keys and passwords are encrypted in the database and shown masked after saving.
+
+**Resend:** verify your sending domain at [resend.com](https://resend.com) (it gives you SPF and DKIM DNS records), create an API key, and enter the key plus a from address on that domain.
+
+**Zoho Mail:**
+1. In Zoho Accounts → Security → **App passwords**, create a password for Loan Central.
+2. Choose the SMTP server for your Zoho region. Use `smtppro.*` for Zoho Workplace / custom-domain mailboxes.
+3. Use port 465 (SSL).
+4. The username is your full Zoho email address, and the from address must be that mailbox or a verified alias.
+
+The `RESEND_*` environment variables still work as a fallback when nothing is configured in the dashboard.
 
 Every email is recorded in the `communications` table with its delivery status. If an email fails, the business action (submission, status change) still completes, and the failure is shown on the application timeline.
 
@@ -99,7 +107,8 @@ There's nothing to set up. Limits are counted in the `rate_limits` table in Post
    - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` (12+ characters) and optionally `SEED_ADMIN_NAME`: your first super admin account
    - leave `DEV_EMAIL_CONSOLE` unset
 3. Deploy. Vercel runs the `vercel-build` script, which applies pending migrations and seeds reference data (idempotent) before `next build`, so a fresh Neon database is set up automatically. `DATABASE_URL` must be set for **Preview** and **Production**, otherwise the build fails. Point Preview at a separate Neon branch if you don't want previews migrating the production database.
-4. After deploying: `vercel.json` schedules the daily cleanup job (03:00 UTC), which:
+4. Two daily Vercel Cron jobs are defined in `vercel.json`: cleanup at 03:00 UTC, and repayment reminders at 08:00 UTC.
+5. After deploying: `vercel.json` schedules the daily cleanup job (03:00 UTC), which:
    - removes abandoned uploads
    - removes expired codes and sessions
    - purges encrypted account details once their retention period ends
@@ -131,6 +140,19 @@ There's nothing to set up. Limits are counted in the `rate_limits` table in Post
    - see advisory indicators (age, debt-to-income, documents)
    - add private notes and read the full timeline
 4. Available actions: **Request more information**, **Mark eligible** or **Mark not eligible**, **Request account details**, **Send message**, and **Change status**. Every action is audited and enforced against the status state machine.
+
+**Loans**
+1. From **Final review**, an admin with loan permissions clicks **Approve loan** and sets:
+   - approved amount and currency
+   - flat interest rate (per year)
+   - term, repayment frequency and first due date
+
+   A live preview shows the total interest, total repayable and instalment amount. The applicant is emailed their terms.
+2. After the funds are sent, the admin clicks **Mark as disbursed**, which starts payment reminders.
+3. Admins **record payments** as they arrive (bank transfer, mobile money and so on). Payments are applied to the oldest instalments first, and the applicant gets a receipt. When everything is repaid, the loan is marked repaid and the application becomes *Completed*. A super admin can void a payment that was entered by mistake; balances are recalculated.
+4. Applicants see the loan in their portal: the terms, next payment, outstanding balance, the full schedule and how to pay. You set the repayment instructions under **Settings → Loan settings**.
+5. Reminder emails go out 3 days before each payment, on the due date, and when it's 1 and 7 days overdue. Each reminder is sent only once.
+6. The **Loans** page and the dashboard show active, due-soon, overdue and awaiting-disbursement loans.
 
 **Roles:** `ADMIN` reviews and communicates. `SUPER_ADMIN` can also:
 - manage administrators, loan products and document types

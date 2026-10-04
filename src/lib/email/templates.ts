@@ -228,6 +228,140 @@ export function generalMessageEmail(opts: { firstName: string; reference: string
   return { subject: opts.subject, html, text };
 }
 
+// --- Loans ------------------------------------------------------------------------
+
+function instructionsBlock(instructions: string): string {
+  if (!instructions.trim()) return "";
+  return p("<strong>How to pay</strong>") + paragraphs(instructions);
+}
+
+export function loanApprovedEmail(opts: {
+  firstName: string;
+  reference: string;
+  amount: string;
+  totalRepayable: string;
+  installment: string;
+  installmentCount: number;
+  frequencyLabel: string;
+  firstDueDate: string;
+  rateLabel: string;
+  message?: string;
+  instructions: string;
+  portalUrl: string;
+}): EmailContent {
+  const subject = `Your ${siteConfig.name} loan has been approved`;
+  const html = renderLayout({
+    preheader: `Your loan of ${opts.amount} has been approved. First payment due ${opts.firstDueDate}.`,
+    heading: "Your loan has been approved",
+    body: [
+      p(escapeHtml(greet(opts.firstName))),
+      p(`Good news. Your loan for application <strong>${escapeHtml(opts.reference)}</strong> has been approved on the terms below.`),
+      detailRows([
+        ["Approved amount", opts.amount],
+        ["Interest", opts.rateLabel],
+        ["Total to repay", opts.totalRepayable],
+        ["Repayments", `${opts.installmentCount} × ${opts.installment} (${opts.frequencyLabel.toLowerCase()})`],
+        ["First payment due", opts.firstDueDate],
+      ]),
+      opts.message ? paragraphs(opts.message) : "",
+      instructionsBlock(opts.instructions),
+      p("Your full repayment schedule is in your applicant portal. We'll email you a reminder before each payment is due."),
+      button("View your loan", opts.portalUrl),
+      signOff(),
+    ].join(""),
+  });
+  const text = `${greet(opts.firstName)}\n\nYour loan for application ${opts.reference} has been approved.\n\nApproved amount: ${opts.amount}\nInterest: ${opts.rateLabel}\nTotal to repay: ${opts.totalRepayable}\nRepayments: ${opts.installmentCount} x ${opts.installment} (${opts.frequencyLabel.toLowerCase()})\nFirst payment due: ${opts.firstDueDate}\n\n${opts.message ? `${opts.message}\n\n` : ""}${opts.instructions ? `How to pay:\n${opts.instructions}\n\n` : ""}View your schedule: ${opts.portalUrl}\n\n${SIGN_OFF}`;
+  return { subject, html, text };
+}
+
+export function paymentReminderEmail(opts: {
+  firstName: string;
+  reference: string;
+  kind: "UPCOMING" | "DUE_TODAY" | "OVERDUE_1" | "OVERDUE_7";
+  amount: string;
+  dueDate: string;
+  outstanding: string;
+  instructions: string;
+  portalUrl: string;
+}): EmailContent {
+  const copy = {
+    UPCOMING: { subject: `Payment reminder: ${opts.amount} due ${opts.dueDate}`, heading: "Your next payment is coming up", lead: `A payment of <strong>${escapeHtml(opts.amount)}</strong> is due on <strong>${escapeHtml(opts.dueDate)}</strong>.` },
+    DUE_TODAY: { subject: `Your loan payment of ${opts.amount} is due today`, heading: "Your payment is due today", lead: `A payment of <strong>${escapeHtml(opts.amount)}</strong> is due today.` },
+    OVERDUE_1: { subject: `Your loan payment is overdue`, heading: "Your payment is overdue", lead: `Your payment of <strong>${escapeHtml(opts.amount)}</strong> was due on <strong>${escapeHtml(opts.dueDate)}</strong> and hasn't been received yet.` },
+    OVERDUE_7: { subject: `Action needed: your loan payment is 7 days overdue`, heading: "Your payment is 7 days overdue", lead: `Your payment of <strong>${escapeHtml(opts.amount)}</strong> was due on <strong>${escapeHtml(opts.dueDate)}</strong>. Please pay as soon as possible or contact us if you're having difficulty.` },
+  }[opts.kind];
+  const html = renderLayout({
+    preheader: copy.subject,
+    heading: copy.heading,
+    body: [
+      p(escapeHtml(greet(opts.firstName))),
+      p(copy.lead),
+      detailRows([
+        ["Loan", opts.reference],
+        ["Amount due", opts.amount],
+        ["Due date", opts.dueDate],
+        ["Total outstanding", opts.outstanding],
+      ]),
+      instructionsBlock(opts.instructions),
+      p(`If you've already paid, thank you. It can take a little time for payments to be recorded.`),
+      button("View your loan", opts.portalUrl),
+      signOff(),
+    ].join(""),
+  });
+  const text = `${greet(opts.firstName)}\n\n${copy.lead.replace(/<[^>]+>/g, "")}\n\nLoan: ${opts.reference}\nAmount due: ${opts.amount}\nDue date: ${opts.dueDate}\nTotal outstanding: ${opts.outstanding}\n\n${opts.instructions ? `How to pay:\n${opts.instructions}\n\n` : ""}${opts.portalUrl}\n\n${SIGN_OFF}`;
+  return { subject: copy.subject, html, text };
+}
+
+export function paymentReceivedEmail(opts: { firstName: string; reference: string; amount: string; paidOn: string; outstanding: string; nextDue: string | null; portalUrl: string }): EmailContent {
+  const subject = `Payment received: ${opts.amount}`;
+  const html = renderLayout({
+    preheader: `Thank you. We've recorded your payment of ${opts.amount}.`,
+    heading: "Payment received",
+    body: [
+      p(escapeHtml(greet(opts.firstName))),
+      p(`Thank you. We've recorded your payment towards loan <strong>${escapeHtml(opts.reference)}</strong>.`),
+      detailRows([
+        ["Amount", opts.amount],
+        ["Paid on", opts.paidOn],
+        ["Remaining balance", opts.outstanding],
+        ...(opts.nextDue ? ([["Next payment", opts.nextDue]] as Array<[string, string]>) : []),
+      ]),
+      button("View your loan", opts.portalUrl),
+      signOff(),
+    ].join(""),
+  });
+  const text = `${greet(opts.firstName)}\n\nWe've recorded your payment of ${opts.amount} (paid ${opts.paidOn}) towards loan ${opts.reference}.\nRemaining balance: ${opts.outstanding}${opts.nextDue ? `\nNext payment: ${opts.nextDue}` : ""}\n\n${opts.portalUrl}\n\n${SIGN_OFF}`;
+  return { subject, html, text };
+}
+
+export function loanPaidOffEmail(opts: { firstName: string; reference: string; totalPaid: string; portalUrl: string }): EmailContent {
+  const subject = `Your ${siteConfig.name} loan is fully repaid`;
+  const html = renderLayout({
+    preheader: "Congratulations, your loan is fully repaid.",
+    heading: "Your loan is fully repaid",
+    body: [
+      p(escapeHtml(greet(opts.firstName))),
+      p(`Congratulations. Loan <strong>${escapeHtml(opts.reference)}</strong> has been repaid in full. Total paid: <strong>${escapeHtml(opts.totalPaid)}</strong>.`),
+      p("Thank you for choosing Loan Central."),
+      button("View your account", opts.portalUrl),
+      signOff(),
+    ].join(""),
+  });
+  const text = `${greet(opts.firstName)}\n\nLoan ${opts.reference} has been repaid in full. Total paid: ${opts.totalPaid}.\n\nThank you for choosing Loan Central.\n${opts.portalUrl}\n\n${SIGN_OFF}`;
+  return { subject, html, text };
+}
+
+export function testEmail(opts: { provider: string; adminName: string }): EmailContent {
+  const subject = `${siteConfig.name} test email (${opts.provider})`;
+  const html = renderLayout({
+    preheader: "Your email settings are working.",
+    heading: "Your email settings are working",
+    body: p(`This test was sent through <strong>${escapeHtml(opts.provider)}</strong> at the request of ${escapeHtml(opts.adminName)}.`),
+    footnote: "Internal test message.",
+  });
+  return { subject, html, text: `This test was sent through ${opts.provider} at the request of ${opts.adminName}.` };
+}
+
 // --- Internal -----------------------------------------------------------------
 
 export function adminNewApplicationEmail(opts: { reference: string; amount: string; productName: string; country: string; adminUrl: string }): EmailContent {

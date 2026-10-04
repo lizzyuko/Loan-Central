@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import { CheckCircle, ChatText, Question, Bank, XCircle } from "@phosphor-icons/react";
+import { CheckCircle, ChatText, Question, Bank, XCircle, Seal } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Feedback";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
-import type { ApplicationStatus } from "@/db/schema/enums";
+import type { ApplicationStatus, RepaymentFrequency } from "@/db/schema/enums";
+import { ApproveLoanForm } from "./LoanForms";
 import { STATUS_LABELS, STATUS_TRANSITIONS, WORKFLOW_ONLY_TARGETS } from "@/lib/application/status";
 import {
   changeStatusAction,
@@ -17,7 +18,7 @@ import {
 } from "@/app/admin/(console)/applications/[id]/actions";
 import styles from "./ReviewActions.module.css";
 
-type Panel = "info" | "message" | "eligible" | "ineligible" | "account" | null;
+type Panel = "info" | "message" | "eligible" | "ineligible" | "account" | "approve" | null;
 type Result = { ok: true; message: string; emailStatus?: string } | { ok: false; error: string };
 
 interface Props {
@@ -26,9 +27,11 @@ interface Props {
   canReview: boolean;
   canCommunicate: boolean;
   documentTypes: { key: string; label: string }[];
+  canManageLoans: boolean;
+  loanDefaults: { principal: string; currency: string; termMonths: number; frequency: RepaymentFrequency };
 }
 
-export function ReviewActions({ applicationId, status, canReview, canCommunicate, documentTypes }: Props) {
+export function ReviewActions({ applicationId, status, canReview, canCommunicate, documentTypes, canManageLoans, loanDefaults }: Props) {
   const toast = useToast();
   const [panel, setPanel] = useState<Panel>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +55,7 @@ export function ReviewActions({ applicationId, status, canReview, canCommunicate
     });
   }
 
-  function onSubmit(e: FormEvent<HTMLFormElement>, kind: Exclude<Panel, null>) {
+  function onSubmit(e: FormEvent<HTMLFormElement>, kind: Exclude<Panel, null | "approve">) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const message = String(fd.get("message") ?? "");
@@ -71,7 +74,7 @@ export function ReviewActions({ applicationId, status, canReview, canCommunicate
     }
   }
 
-  if (!canReview && !canCommunicate) return null;
+  if (!canReview && !canCommunicate && !canManageLoans) return null;
 
   const toggle = (p: Panel) => {
     setError(null);
@@ -85,6 +88,11 @@ export function ReviewActions({ applicationId, status, canReview, canCommunicate
       </h2>
 
       <div className={styles.buttons}>
+        {canManageLoans && canGo("APPROVED") && (
+          <Button size="sm" iconLeft={<Seal size={16} />} onClick={() => toggle("approve")} aria-expanded={panel === "approve"}>
+            Approve loan
+          </Button>
+        )}
         {canCommunicate && canGo("MORE_INFORMATION_REQUIRED") && (
           <Button variant="secondary" size="sm" iconLeft={<Question size={16} />} onClick={() => toggle("info")} aria-expanded={panel === "info"}>
             Request more information
@@ -113,6 +121,12 @@ export function ReviewActions({ applicationId, status, canReview, canCommunicate
       </div>
 
       {error && <Alert tone="danger">{error}</Alert>}
+
+      {panel === "approve" && (
+        <div className={styles.form}>
+          <ApproveLoanForm applicationId={applicationId} defaults={loanDefaults} onDone={() => setPanel(null)} />
+        </div>
+      )}
 
       {panel === "info" && (
         <form className={styles.form} onSubmit={(e) => onSubmit(e, "info")}>

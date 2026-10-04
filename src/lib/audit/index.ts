@@ -43,7 +43,15 @@ export type AuditAction =
   | "account_details.purged"
   | "product.created"
   | "product.updated"
-  | "document_type.updated";
+  | "document_type.updated"
+  | "loan.approved"
+  | "loan.disbursed"
+  | "loan.payment_recorded"
+  | "loan.payment_voided"
+  | "loan.paid_off"
+  | "settings.email_updated"
+  | "settings.email_tested"
+  | "settings.loans_updated";
 
 export interface Actor {
   type: ActorType;

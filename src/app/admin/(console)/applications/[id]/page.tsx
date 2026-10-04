@@ -6,6 +6,8 @@ import { ArrowLeft, ArrowSquareOut, CheckCircle, Question, WarningCircle } from 
 import { AccountDetailsReveal } from "@/components/admin/AccountDetailsReveal";
 import { NoteForm } from "@/components/admin/NoteForm";
 import { ReviewActions } from "@/components/admin/ReviewActions";
+import { LoanSection } from "@/components/admin/LoanSection";
+import { getLoanByApplication } from "@/lib/loans/service";
 import { StatusBadge } from "@/components/application/StatusBadge";
 import { Badge, EmptyState } from "@/components/ui/Feedback";
 import { countryName } from "@/config/countries";
@@ -63,7 +65,7 @@ export default async function ApplicationDetailPage({ params }: PageProps<"/admi
   if (!detail) notFound();
 
   const ctx = await getRequestContext();
-  await recordApplicationViewed(admin, detail.application.id, ctx.ipHash);
+  const [loanDetail] = await Promise.all([getLoanByApplication(detail.application.id), recordApplicationViewed(admin, detail.application.id, ctx.ipHash)]);
 
   const { application, applicant, loan, address, employment, financial, product } = detail;
   const purpose = LOAN_PURPOSES.find((p) => p.value === loan.purpose)?.label ?? loan.purpose;
@@ -92,6 +94,8 @@ export default async function ApplicationDetailPage({ params }: PageProps<"/admi
 
       <div className={styles.grid}>
         <div className={styles.mainCol}>
+          {loanDetail && <LoanSection detail={loanDetail} canManage={can(admin, "loans.manage")} canVoid={can(admin, "payments.void")} />}
+
           <Section title="Applicant">
             <Rows
               rows={[
@@ -256,6 +260,8 @@ export default async function ApplicationDetailPage({ params }: PageProps<"/admi
             canReview={can(admin, "applications.review")}
             canCommunicate={can(admin, "communications.send")}
             documentTypes={Object.entries(detail.documentLabels).map(([key, label]) => ({ key, label }))}
+            canManageLoans={can(admin, "loans.manage")}
+            loanDefaults={{ principal: loan.amount, currency: loan.currency, termMonths: loan.termMonths, frequency: loan.repaymentFrequency }}
           />
 
           <section className={styles.sidePanel}>

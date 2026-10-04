@@ -12,13 +12,15 @@ describe("status transitions", () => {
   });
 
   it("allows the happy path", () => {
-    const path = ["SUBMITTED", "UNDER_REVIEW", "ELIGIBLE", "ACCOUNT_DETAILS_REQUESTED", "FINAL_REVIEW", "COMPLETED"] as const;
+    const path = ["SUBMITTED", "UNDER_REVIEW", "ELIGIBLE", "ACCOUNT_DETAILS_REQUESTED", "FINAL_REVIEW", "APPROVED", "COMPLETED"] as const;
     for (let i = 0; i < path.length - 1; i++) expect(canTransition(path[i]!, path[i + 1]!)).toBe(true);
   });
 
   it("blocks skipping straight to account details or completion", () => {
     expect(canTransition("SUBMITTED", "ACCOUNT_DETAILS_REQUESTED")).toBe(false);
     expect(canTransition("UNDER_REVIEW", "COMPLETED")).toBe(false);
+    expect(canTransition("FINAL_REVIEW", "COMPLETED")).toBe(false); // must be approved first
+    expect(canTransition("UNDER_REVIEW", "APPROVED")).toBe(false);
     expect(() => assertTransition("NOT_ELIGIBLE", "ACCOUNT_DETAILS_REQUESTED")).toThrow(InvalidTransitionError);
   });
 
@@ -28,7 +30,8 @@ describe("status transitions", () => {
 
   it("produces an applicant-facing tracker", () => {
     const steps = applicantProgress("ACCOUNT_DETAILS_REQUESTED");
-    expect(steps.map((s) => s.state)).toEqual(["complete", "complete", "complete", "current", "upcoming"]);
+    expect(steps.map((s) => s.state)).toEqual(["complete", "complete", "complete", "current", "upcoming", "upcoming"]);
+    expect(applicantProgress("APPROVED").every((s) => s.state === "complete")).toBe(true);
     expect(applicantProgress("MORE_INFORMATION_REQUIRED")[1]?.state).toBe("attention");
   });
 });

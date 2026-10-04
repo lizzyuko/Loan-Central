@@ -78,3 +78,58 @@
   flex-wrap: wrap;
   gap: var(--space-4);
 }
+
+.providerCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cardTitle {
+  font-size: var(--text-base);
+}
+
+.help {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 70ch;
+}
+
+.radioRow {
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.radioOption {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.radioOption:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+}
+
+.radioOption input {
+  accent-color: var(--color-primary);
+}

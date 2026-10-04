@@ -36,6 +36,13 @@
       "when": 1791135994688,
       "tag": "0004_drop_applicant_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791137364153,
+      "tag": "0005_loans_and_settings",
+      "breakpoints": true
     }
   ]
 }

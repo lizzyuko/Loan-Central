@@ -102,14 +102,18 @@ export function cronSecret(): string | undefined {
 }
 
 
-export function resendConfig() {
-  const cfg = need("Email (Resend)", ["RESEND_API_KEY", "RESEND_FROM_EMAIL"]);
-  return { ...cfg, RESEND_REPLY_TO: env.RESEND_REPLY_TO };
+/**
+ * Optional env-var Resend config. Used only when no provider is configured in
+ * the admin dashboard (Settings → Email).
+ */
+export function envResendConfig(): { apiKey: string; from: string; replyTo: string | null } | null {
+  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) return null;
+  return { apiKey: env.RESEND_API_KEY, from: env.RESEND_FROM_EMAIL, replyTo: env.RESEND_REPLY_TO ?? null };
 }
 
-/** Dev-only escape hatch: print emails to the console when Resend isn't configured. */
+/** Dev-only escape hatch: print emails to the console when no provider is configured. */
 export function emailConsoleFallbackEnabled(): boolean {
-  return isDevelopment && !env.RESEND_API_KEY && env.DEV_EMAIL_CONSOLE === "true";
+  return isDevelopment && env.DEV_EMAIL_CONSOLE === "true";
 }
 
 export function cloudinaryConfig() {
