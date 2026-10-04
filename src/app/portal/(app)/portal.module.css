@@ -186,3 +186,18 @@
   color: var(--color-text-muted);
   text-decoration: none;
 }
+
+a.email {
+  text-decoration: none;
+}
+
+a.email:hover {
+  color: var(--color-text);
+}
+
+@media (max-width: 639px) {
+  a.email {
+    display: block;
+    max-width: 40vw;
+  }
+}

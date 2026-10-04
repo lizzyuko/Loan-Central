@@ -4,12 +4,11 @@ import { __test as loggerTest } from "@/lib/security/logger";
 import { windowStart } from "@/lib/security/rate-limit";
 import { hashPassword, newPasswordSchema, verifyPassword } from "@/lib/auth/password";
 import { safeRedirectPath } from "@/lib/security/request";
-import { hashCode } from "@/lib/auth/codes";
 import { verifyTurnstile } from "@/lib/turnstile/verify";
 import { checkFile, sanitizeFilename } from "@/lib/validation/upload";
 import { accountDetailsSchema, isValidIbanChecksum } from "@/lib/validation/account";
 import { escapeHtml } from "@/lib/email/layout";
-import { accountDetailsRequestEmail, generalMessageEmail, verificationEmail } from "@/lib/email/templates";
+import { accountDetailsRequestEmail, generalMessageEmail, passwordResetEmail } from "@/lib/email/templates";
 
 vi.mock("next/headers", () => ({ headers: async () => new Headers(), cookies: async () => ({ get: () => undefined }) }));
 
@@ -28,14 +27,14 @@ describe("encryption", () => {
   });
 });
 
-describe("verification codes", () => {
-  it("are 6 digits and hashed with a server key, bound to user and kind", () => {
-    const code = generateNumericCode();
-    expect(code).toMatch(/^\d{6}$/);
-    const h = hashCode("applicant", "user-1", code);
-    expect(h).not.toContain(code);
-    expect(hashCode("applicant", "user-2", code)).not.toBe(h);
-    expect(safeEqual(h, hashCode("applicant", "user-1", code))).toBe(true);
+describe("keyed hashing", () => {
+  it("generates numeric codes of the requested length", () => {
+    expect(generateNumericCode()).toMatch(/^\d{6}$/);
+  });
+
+  it("compares in constant time", () => {
+    expect(safeEqual(hmac("a", "x"), hmac("a", "x"))).toBe(true);
+    expect(safeEqual(hmac("a", "x"), hmac("a", "y"))).toBe(false);
   });
 
   it("hmac differs by purpose", () => {
@@ -174,7 +173,7 @@ describe("email templates", () => {
   });
 
   it("use the required subjects", () => {
-    expect(verificationEmail({ code: "123456", link: "https://x", minutes: 10 }).subject).toBe("Your Loan Central verification code");
+    expect(passwordResetEmail({ name: "A", link: "https://x", minutes: 30, audience: "applicant" }).subject).toBe("Reset your Loan Central password");
     expect(accountDetailsRequestEmail({ firstName: "A", reference: "LC-2026-111111", portalUrl: "https://x" }).subject).toBe("Next step for your Loan Central application");
   });
 

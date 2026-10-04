@@ -1,4 +1,4 @@
-import { EnvelopeSimpleOpen, FileLock, Fingerprint, Robot, ShieldCheck } from "@phosphor-icons/react/ssr";
+import { FileLock, Fingerprint, Password, Robot, ShieldCheck } from "@phosphor-icons/react/ssr";
 import type { ReactNode } from "react";
 import styles from "./Security.module.css";
 
@@ -14,9 +14,9 @@ const POINTS: { title: string; body: string; icon: ReactNode }[] = [
     icon: <FileLock size={22} />,
   },
   {
-    title: "Email verification",
-    body: "There are no passwords to leak. You sign in with a one-time code sent to your email, which expires within minutes.",
-    icon: <EnvelopeSimpleOpen size={22} />,
+    title: "Protected accounts",
+    body: "Passwords are stored only as strong one-way hashes. Repeated wrong attempts lock the account, and reset links expire within minutes.",
+    icon: <Password size={22} />,
   },
   {
     title: "Privacy-conscious design",

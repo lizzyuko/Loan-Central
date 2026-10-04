@@ -32,6 +32,12 @@ export const applicants = pgTable(
     phone: text("phone").notNull(), // E.164
     countryOfResidence: char("country_of_residence", { length: 2 }).notNull(),
     nationality: char("nationality", { length: 2 }),
+    /** scrypt hash, set when the applicant creates their account on submission. */
+    passwordHash: text("password_hash"),
+    passwordUpdatedAt: timestamp("password_updated_at", { withTimezone: true }),
+    failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -1,5 +1,5 @@
 import { siteConfig } from "@/config/site";
-import { button, codeBlock, detailRows, escapeHtml, list, p, paragraphs, renderLayout, type EmailContent } from "./layout";
+import { button, detailRows, escapeHtml, list, p, paragraphs, renderLayout, type EmailContent } from "./layout";
 
 /**
  * Transactional email templates. Rules:
@@ -16,26 +16,6 @@ function signOff(): string {
 
 function greet(firstName?: string): string {
   return firstName ? `Hi ${firstName},` : "Hello,";
-}
-
-// --- Authentication -----------------------------------------------------------
-
-/** Applicant portal sign-in code + magic link. */
-export function verificationEmail(opts: { code: string; link: string; minutes: number }): EmailContent {
-  const subject = `Your ${siteConfig.name} verification code`;
-  const html = renderLayout({
-    preheader: `Your code is ${opts.code}. It expires in ${opts.minutes} minutes.`,
-    heading: "Your verification code",
-    body: [
-      p(`Use this code to sign in to your applicant portal. It expires in ${opts.minutes} minutes and can only be used once.`),
-      codeBlock(opts.code),
-      p("Or sign in with this one-time link:"),
-      button("Sign in securely", opts.link),
-      p(`If you didn't request this, you can ignore this email. Someone may have entered your address by mistake.`),
-    ].join(""),
-  });
-  const text = `Your ${siteConfig.name} verification code is ${opts.code}. It expires in ${opts.minutes} minutes.\n\nOr sign in with this one-time link: ${opts.link}\n\nIf you didn't request this, ignore this email.`;
-  return { subject, html, text };
 }
 
 // --- Administrator accounts ---------------------------------------------------
@@ -57,37 +37,41 @@ export function adminInviteEmail(opts: { name: string; inviterName: string; link
   return { subject, html, text };
 }
 
-export function passwordResetEmail(opts: { name: string; link: string; minutes: number }): EmailContent {
+type Audience = "admin" | "applicant";
+const ACCOUNT_LABEL: Record<Audience, string> = { admin: "admin account", applicant: "applicant portal account" };
+
+export function passwordResetEmail(opts: { name: string; link: string; minutes: number; audience: Audience }): EmailContent {
   const subject = `Reset your ${siteConfig.name} password`;
   const html = renderLayout({
     preheader: "Use this link to choose a new password.",
     heading: "Reset your password",
     body: [
       p(escapeHtml(greet(opts.name))),
-      p("We received a request to reset the password for your admin account."),
+      p(`We received a request to reset the password for your ${ACCOUNT_LABEL[opts.audience]}.`),
       button("Choose a new password", opts.link),
       p(`This link expires in ${opts.minutes} minutes and can only be used once. If you didn't ask to reset your password, you can ignore this email. Your password won't change.`),
     ].join(""),
     footnote: `${siteConfig.name} will never ask for your password by email or phone.`,
   });
-  const text = `${greet(opts.name)}\n\nReset your ${siteConfig.name} admin password (link expires in ${opts.minutes} minutes):\n${opts.link}\n\nIf you didn't request this, ignore this email.`;
+  const text = `${greet(opts.name)}\n\nReset the password for your ${siteConfig.name} ${ACCOUNT_LABEL[opts.audience]} (link expires in ${opts.minutes} minutes):\n${opts.link}\n\nIf you didn't request this, ignore this email.`;
   return { subject, html, text };
 }
 
-export function passwordChangedEmail(opts: { name: string; resetUrl: string }): EmailContent {
+export function passwordChangedEmail(opts: { name: string; resetUrl: string; audience: Audience }): EmailContent {
+  const escalate = opts.audience === "admin" ? "contact your super administrator" : `contact us at ${siteConfig.supportEmail}`;
   const subject = `Your ${siteConfig.name} password was changed`;
   const html = renderLayout({
-    preheader: "Your admin password was just changed.",
+    preheader: "Your password was just changed.",
     heading: "Your password was changed",
     body: [
       p(escapeHtml(greet(opts.name))),
-      p("The password for your admin account was just changed, and you were signed out of other devices."),
-      p(`If this wasn't you, reset your password immediately and contact your super administrator.`),
+      p(`The password for your ${ACCOUNT_LABEL[opts.audience]} was just changed, and you were signed out of other devices.`),
+      p(`If this wasn't you, reset your password immediately and ${escapeHtml(escalate)}.`),
       button("Reset password", opts.resetUrl),
     ].join(""),
     footnote: `${siteConfig.name} will never ask for your password by email or phone.`,
   });
-  const text = `${greet(opts.name)}\n\nThe password for your ${siteConfig.name} admin account was just changed. If this wasn't you, reset it now: ${opts.resetUrl}`;
+  const text = `${greet(opts.name)}\n\nThe password for your ${siteConfig.name} ${ACCOUNT_LABEL[opts.audience]} was just changed. If this wasn't you, reset it now (${opts.resetUrl}) and ${escalate}.`;
   return { subject, html, text };
 }
 
@@ -204,7 +188,7 @@ export function accountDetailsRequestEmail(opts: { firstName: string; reference:
       p(`Application <strong>${escapeHtml(opts.reference)}</strong> has progressed to the next stage. To continue, please provide the requested account information through your secure applicant portal.`),
       opts.message ? paragraphs(opts.message) : "",
       button("Continue securely", opts.portalUrl),
-      p(`<strong>For your security:</strong> never send bank details by email. We will only ever collect them in the portal after you sign in with a one-time code.`),
+      p(`<strong>For your security:</strong> never send bank details by email. We will only ever collect them in the portal after you sign in with your password.`),
       signOff(),
     ].join(""),
   });

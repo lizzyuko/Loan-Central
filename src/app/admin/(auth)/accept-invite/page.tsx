@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { AuthCard } from "@/components/forms/AuthCard";
-import { SetPasswordForm } from "@/components/forms/AdminAuthForms";
+import { SetPasswordForm } from "@/components/forms/PasswordAuthForms";
 import { Alert } from "@/components/ui/Feedback";
-import { inspectAdminToken } from "@/lib/auth/admin-tokens";
+import { inspectToken } from "@/lib/auth/tokens";
 import { acceptInvite } from "../actions";
 
 export const metadata: Metadata = { title: "Accept invitation", referrer: "no-referrer" };
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Accept invitation", referrer: "no-re
 export default async function AcceptInvitePage({ searchParams }: PageProps<"/admin/accept-invite">) {
   const { token } = await searchParams;
   const value = typeof token === "string" ? token : "";
-  const target = value ? await inspectAdminToken("INVITE", value) : null;
+  const target = value ? await inspectToken("admin", "INVITE", value) : null;
 
   return (
     <AuthCard

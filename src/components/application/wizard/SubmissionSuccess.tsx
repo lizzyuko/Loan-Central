@@ -36,17 +36,17 @@ export function SubmissionSuccess({ reference, email }: { reference: string; ema
             <strong>We email you an update.</strong> If we need anything else, we&apos;ll tell you exactly what.
           </li>
           <li>
-            <strong>Track progress any time.</strong> Sign in to your applicant portal with a one-time code sent to your email.
+            <strong>Track progress any time.</strong> You&apos;re signed in now. Next time, sign in to the applicant portal with your email and password.
           </li>
         </ol>
 
         <p className={styles.note}>
           Submitting an application does not guarantee approval or a loan offer. We will never ask for your bank details or a
-          verification code by phone or email reply.
+          password by phone or email.
         </p>
 
         <div className={styles.actions}>
-          <LinkButton href="/portal/login">Go to applicant portal</LinkButton>
+          <LinkButton href="/portal">Go to applicant portal</LinkButton>
           <LinkButton href="/" variant="secondary">
             Back to home
           </LinkButton>

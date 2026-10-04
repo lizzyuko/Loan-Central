@@ -22,9 +22,15 @@ describe.skipIf(!RUN)("integration", async () => {
   const schema = await import("@/db/schema");
   const { __setTransport } = await import("@/lib/email/client");
   const { submitApplication } = await import("@/lib/application/submit");
-  const { requestLoginCode } = await import("@/lib/auth/login");
-  const { issueCode, verifyCode, MAX_ATTEMPTS } = await import("@/lib/auth/codes");
-  const { loginWithPassword, requestPasswordReset, redeemToken, sendInvite, MAX_FAILED_LOGINS } = await import("@/lib/auth/admin-auth");
+  const passwordAuth = await import("@/lib/auth/password-auth");
+  const { MAX_FAILED_LOGINS } = passwordAuth;
+  const { sendInvite } = await import("@/lib/auth/admin-auth");
+  const { getCurrentApplicant } = await import("@/lib/auth/applicant");
+  type Kind = "admin" | "applicant";
+  // Admin is the default kind; applicant tests pass it explicitly.
+  const loginWithPassword = (o: Parameters<typeof passwordAuth.loginWithPassword>[1], kind: Kind = "admin") => passwordAuth.loginWithPassword(kind, o);
+  const requestPasswordReset = (o: Parameters<typeof passwordAuth.requestPasswordReset>[1], kind: Kind = "admin") => passwordAuth.requestPasswordReset(kind, o);
+  const redeemToken = (o: Parameters<typeof passwordAuth.redeemToken>[1], kind: Kind = "admin") => passwordAuth.redeemToken(kind, o);
   const { hashPassword } = await import("@/lib/auth/password");
   const { getCurrentAdmin, requireAdmin, AuthError } = await import("@/lib/auth/admin");
   const { getOwnedApplicationId } = await import("@/lib/auth/applicant");
@@ -218,29 +224,62 @@ describe.skipIf(!RUN)("integration", async () => {
     expect((await loginWithPassword({ email: "reset@test.dev", password: "a-brand-new-password-9", turnstileToken: "ok", ctx })).ok).toBe(true);
   });
 
-  it("enforces single use, expiry and attempt limits on applicant codes", async () => {
+  it("creates the applicant's account on submission and lets them sign in with it", async () => {
     const app = (await submit()).created!;
-    const [applicant] = await db.select().from(schema.applicants).where(eq(schema.applicants.email, app.email));
-    const id = applicant!.id;
-    const { code } = await issueCode("applicant", id, { ipHash: null });
-    expect((await verifyCode("applicant", id, code)).ok).toBe(true);
-    expect((await verifyCode("applicant", id, code)).ok).toBe(false); // single use
+    const [row] = await db.select().from(schema.applicants).where(eq(schema.applicants.id, app.applicantId));
+    expect(row!.passwordHash).toMatch(/^scrypt\$/);
+    expect(row!.passwordHash).not.toContain(validSubmission.password);
 
-    const second = await issueCode("applicant", id, { ipHash: null });
-    await db.update(schema.applicantVerificationCodes).set({ expiresAt: new Date(Date.now() - 1000) });
-    expect(await verifyCode("applicant", id, second.code)).toEqual({ ok: false, reason: "expired" });
+    asBrowser();
+    const res = await loginWithPassword({ email: app.email, password: validSubmission.password, turnstileToken: "ok", ctx }, "applicant");
+    expect(res.ok).toBe(true);
+    expect((await getCurrentApplicant())?.id).toBe(app.applicantId);
+  });
 
-    const third = await issueCode("applicant", id, { ipHash: null });
-    const wrong = third.code === "000000" ? "111111" : "000000";
-    for (let i = 0; i < MAX_ATTEMPTS - 1; i++) expect((await verifyCode("applicant", id, wrong)).ok).toBe(false);
-    expect(await verifyCode("applicant", id, wrong)).toEqual({ ok: false, reason: "too_many_attempts" });
-    expect((await verifyCode("applicant", id, third.code)).ok).toBe(false); // burned
+  it("rejects weak passwords for new accounts", async () => {
+    const r = await submit({ password: "short" });
+    expect(r.result.ok).toBe(false);
+    if (!r.result.ok) expect(r.result.step).toBe("review");
+  });
 
-    // Unknown applicant emails receive nothing.
+  it("requires the existing password to add an application to an existing account", async () => {
+    const first = (await submit({}, "first")).created!;
+    // Get past the accidental-duplicate window.
+    await db.update(schema.applications).set({ createdAt: new Date(Date.now() - 60 * 60 * 1000) });
+
+    const hijack = await submit({ password: "attacker-password-123", personal: { ...validSubmission.personal, firstName: "Mallory" } }, "second");
+    expect(hijack.result.ok).toBe(false);
+    const [unchanged] = await db.select().from(schema.applicants).where(eq(schema.applicants.id, first.applicantId));
+    expect(unchanged!.firstName).toBe(validSubmission.personal.firstName);
+
+    const legit = await submit({}, "third");
+    expect(legit.result.ok).toBe(true);
+    expect(legit.created!.applicantId).toBe(first.applicantId);
+  });
+
+  it("asks legacy accounts without a password to reset first", async () => {
+    const first = (await submit({}, "legacy-1")).created!;
+    await db.update(schema.applicants).set({ passwordHash: null }).where(eq(schema.applicants.id, first.applicantId));
+    await db.update(schema.applications).set({ createdAt: new Date(Date.now() - 60 * 60 * 1000) });
+    const r = await submit({}, "legacy-2");
+    expect(r.result.ok).toBe(false);
+    if (!r.result.ok) expect(r.result.error).toMatch(/Forgot password/);
+  });
+
+  it("resets an applicant password by email", async () => {
+    const app = (await submit()).created!;
     sent.length = 0;
-    expect(await requestLoginCode({ email: "stranger@test.dev", turnstileToken: "ok", ctx })).toEqual({ ok: true });
+    expect(await requestPasswordReset({ email: app.email, turnstileToken: "ok", ctx }, "applicant")).toEqual({ ok: true });
+    expect(await requestPasswordReset({ email: "stranger@test.dev", turnstileToken: "ok", ctx }, "applicant")).toEqual({ ok: true });
     await flushAfter();
-    expect(sent).toHaveLength(0);
+    expect(sent.map((m) => m.to)).toEqual([app.email]);
+    const token = tokenFromLastEmail();
+    // Applicant tokens can't be redeemed as admin tokens.
+    expect((await redeemToken({ purpose: "PASSWORD_RESET", token, password: "a-brand-new-password-9", ctx }, "admin")).ok).toBe(false);
+    asBrowser();
+    expect((await redeemToken({ purpose: "PASSWORD_RESET", token, password: "a-brand-new-password-9", ctx }, "applicant")).ok).toBe(true);
+    expect((await getCurrentApplicant())?.id).toBe(app.applicantId);
+    expect((await loginWithPassword({ email: app.email, password: "a-brand-new-password-9", turnstileToken: "ok", ctx }, "applicant")).ok).toBe(true);
   });
 
   it("creates a session only after verification and blocks deactivated admins", async () => {

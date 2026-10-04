@@ -22,6 +22,7 @@ import { rateLimit } from "@/lib/security/rate-limit";
 import type { RequestContext } from "@/lib/security/request";
 import { verifyTurnstile } from "@/lib/turnstile/verify";
 import { applicationSubmissionSchema, CONSENT_KEYS, toE164, type ApplicationSubmission } from "@/lib/validation/application";
+import { hashPassword, newPasswordSchema, verifyPassword } from "@/lib/auth/password";
 import { DEFAULT_REQUIRED_DOCUMENTS } from "@/config/documents";
 import { toMonthlyIncome } from "./income";
 import { generateReference } from "./reference";
@@ -47,6 +48,7 @@ export interface SubmitDeps {
 
 export interface SubmittedApplication {
   id: string;
+  applicantId: string;
   reference: string;
   email: string;
   firstName: string;
@@ -139,10 +141,14 @@ export async function submitApplication(raw: unknown, deps: SubmitDeps): Promise
   const docCheck = await checkDocuments(input, product?.requiredDocumentTypes, deps.draftTokenHash);
   if (!docCheck.ok) return fail(docCheck.error, { step: "documents", resetTurnstile: true });
 
-  // 6. Persist atomically. Retry only on (very rare) reference collisions.
+  // 6. Account: create one for new applicants; returning applicants must prove ownership.
+  const account = await resolveAccount(input.personal.email, input.password);
+  if (!account.ok) return fail(account.error, { step: "review", resetTurnstile: true });
+
+  // 7. Persist atomically. Retry only on (very rare) reference collisions.
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const created = await persist(input, product ?? null, docCheck.documentIds, deps);
+      const created = await persist(input, product ?? null, docCheck.documentIds, deps, account.account);
       return { result: { ok: true, reference: created.reference, email: created.email }, created };
     } catch (err) {
       if (isUniqueViolation(err, "applications_reference_idx")) continue;
@@ -153,11 +159,48 @@ export async function submitApplication(raw: unknown, deps: SubmitDeps): Promise
           .where(eq(applications.idempotencyKey, input.idempotencyKey));
         if (row) return { result: { ok: true, reference: row.reference, email: input.personal.email } } as Outcome;
       }
+      if (err instanceof AccountRaceError) {
+        return fail(ACCOUNT_EXISTS, { step: "review", resetTurnstile: true });
+      }
       logger.error("Application persistence failed", { err });
       return fail("We couldn't save your application. Please try again.", { resetTurnstile: true });
     }
   }
   return fail("We couldn't save your application. Please try again.", { resetTurnstile: true });
+}
+
+const ACCOUNT_EXISTS =
+  "An account already exists for this email address. Choose \"Already have an account?\" and enter that account's password, or reset it from the sign-in page.";
+
+class AccountRaceError extends Error {}
+
+type AccountPlan = { kind: "new"; passwordHash: string } | { kind: "existing"; applicantId: string };
+
+/**
+ * New email: validate and hash the chosen password. Existing email: the
+ * password must match, so nobody can attach applications to (or overwrite
+ * the details of) someone else's account.
+ */
+async function resolveAccount(email: string, password: string): Promise<{ ok: true; account: AccountPlan } | { ok: false; error: string }> {
+  const [existing] = await getDb()
+    .select({ id: applicants.id, passwordHash: applicants.passwordHash })
+    .from(applicants)
+    .where(eq(applicants.email, email))
+    .limit(1);
+
+  if (!existing) {
+    const policy = newPasswordSchema.safeParse(password);
+    if (!policy.success) return { ok: false, error: policy.error.issues[0]?.message ?? "Choose a stronger password." };
+    return { ok: true, account: { kind: "new", passwordHash: await hashPassword(password) } };
+  }
+  if (!existing.passwordHash) {
+    return {
+      ok: false,
+      error: "An account already exists for this email address. Use \"Forgot password\" on the sign-in page to set a password, then submit again. Your answers are saved in this browser.",
+    };
+  }
+  if (!(await verifyPassword(password, existing.passwordHash))) return { ok: false, error: ACCOUNT_EXISTS };
+  return { ok: true, account: { kind: "existing", applicantId: existing.id } };
 }
 
 async function checkDocuments(
@@ -203,15 +246,15 @@ async function persist(
   product: { id: string; name: string } | null,
   documentIds: string[],
   deps: SubmitDeps,
+  account: AccountPlan,
 ): Promise<SubmittedApplication> {
   const { loan, personal, address, employment, financial } = input;
   const reference = generateReference();
   const phone = toE164(personal.phoneNumber, personal.phoneCountry);
 
   return getDb().transaction(async (tx) => {
-    // Applicant identity is the email; details reflect the latest submission.
+    // Details reflect the latest submission (ownership was verified above).
     const applicantValues = {
-      email: personal.email,
       firstName: personal.firstName,
       middleName: personal.middleName ?? null,
       lastName: personal.lastName,
@@ -220,12 +263,23 @@ async function persist(
       countryOfResidence: personal.countryOfResidence,
       nationality: personal.nationality ?? null,
     };
-    const [applicant] = await tx
-      .insert(applicants)
-      .values(applicantValues)
-      .onConflictDoUpdate({ target: applicants.email, set: { ...applicantValues, updatedAt: new Date() } })
-      .returning({ id: applicants.id });
-    if (!applicant) throw new Error("Applicant upsert failed");
+    let applicant: { id: string } | undefined;
+    if (account.kind === "new") {
+      [applicant] = await tx
+        .insert(applicants)
+        .values({ ...applicantValues, email: personal.email, passwordHash: account.passwordHash, passwordUpdatedAt: new Date() })
+        .onConflictDoNothing({ target: applicants.email })
+        .returning({ id: applicants.id });
+      // Someone created this account between our check and now.
+      if (!applicant) throw new AccountRaceError();
+    } else {
+      [applicant] = await tx
+        .update(applicants)
+        .set(applicantValues)
+        .where(eq(applicants.id, account.applicantId))
+        .returning({ id: applicants.id });
+      if (!applicant) throw new Error("Applicant update failed");
+    }
 
     const [application] = await tx
       .insert(applications)
@@ -316,6 +370,7 @@ async function persist(
 
     return {
       id: applicationId,
+      applicantId: applicant.id,
       reference,
       email: personal.email,
       firstName: personal.firstName,

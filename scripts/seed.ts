@@ -201,7 +201,7 @@ async function main() {
       await db.transaction(async (tx) => {
         const [applicant] = await tx
           .insert(schema.applicants)
-          .values({ email: s.email, firstName: s.first, lastName: s.last, dateOfBirth: s.dob, phone: s.phone, countryOfResidence: s.country, nationality: s.country })
+          .values({ email: s.email, firstName: s.first, lastName: s.last, dateOfBirth: s.dob, phone: s.phone, countryOfResidence: s.country, nationality: s.country, passwordHash: devHash, passwordUpdatedAt: new Date() })
           .returning({ id: schema.applicants.id });
         const [app] = await tx
           .insert(schema.applications)

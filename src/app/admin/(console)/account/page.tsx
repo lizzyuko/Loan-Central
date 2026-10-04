@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ChangePasswordForm } from "@/components/forms/AdminAuthForms";
+import { ChangePasswordForm } from "@/components/forms/PasswordAuthForms";
 import { requireAdminPage } from "@/lib/auth/admin";
 import { ROLE_LABELS } from "@/lib/auth/permissions";
 import { changeOwnPassword } from "../../(auth)/actions";

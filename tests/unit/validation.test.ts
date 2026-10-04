@@ -24,6 +24,7 @@ export const validPersonal = {
 export const validSubmission = {
   idempotencyKey: "3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e",
   turnstileToken: "token",
+  password: "river-lantern-copper-71",
   loan: { productSlug: "", purpose: "personal", purposeDetails: "", amount: "12,500", currency: "GBP", termMonths: "24", repaymentFrequency: "MONTHLY" },
   personal: validPersonal,
   address: { country: "GB", region: "", city: "Leeds", line1: "18 Park Square East", line2: "", postalCode: "LS1 2NE" },
@@ -107,6 +108,10 @@ describe("full submission", () => {
 
   it("requires every consent", () => {
     expect(consentSchema.safeParse({ terms: true, privacy: true, disclosure: false, accuracy: true }).success).toBe(false);
+  });
+
+  it("requires a password", () => {
+    expect(applicationSubmissionSchema.safeParse({ ...validSubmission, password: "" }).success).toBe(false);
   });
 
   it("requires a UUID idempotency key", () => {

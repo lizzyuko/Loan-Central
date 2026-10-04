@@ -131,6 +131,12 @@ export const consentSchema = z.object({
 export const applicationSubmissionSchema = z.object({
   idempotencyKey: z.uuid(),
   turnstileToken: z.string().min(1).max(2048),
+  /**
+   * New applicants create their account password here; returning applicants
+   * enter their existing one. The new-password policy is checked server-side
+   * only when a new account is created.
+   */
+  password: z.string().min(1, { error: "Enter a password" }).max(128),
   loan: loanDetailsSchema,
   personal: personalInfoSchema,
   address: addressSchema,

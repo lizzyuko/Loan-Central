@@ -2,6 +2,7 @@
 
 import { after } from "next/server";
 import { submitApplication } from "@/lib/application/submit";
+import { createSession } from "@/lib/auth/session";
 import { notifyApplicationSubmitted } from "@/lib/application/notifications";
 import type { SubmitApplicationResult } from "@/lib/application/submit-types";
 import { logger } from "@/lib/security/logger";
@@ -17,6 +18,8 @@ export async function submitApplicationAction(input: unknown): Promise<SubmitApp
     if (outcome.created) {
       const created = outcome.created;
       await clearDraftCookie();
+      // The applicant just proved the account is theirs (new or existing password).
+      await createSession("applicant", created.applicantId, ctx);
       // Send emails after the response so the applicant isn't kept waiting.
       after(() => notifyApplicationSubmitted(created));
     }

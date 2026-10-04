@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 
 const ADMIN_PUBLIC = new Set(["/admin", "/admin/forgot-password", "/admin/reset-password", "/admin/accept-invite"]);
-const PORTAL_PUBLIC = new Set(["/portal/login", "/portal/verify"]);
+const PORTAL_PUBLIC = new Set(["/portal/login", "/portal/forgot-password", "/portal/reset-password"]);
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,7 +18,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/admin", request.url));
   }
   if (isPortal && !PORTAL_PUBLIC.has(pathname) && !request.cookies.has("lc_applicant_session")) {
-    return NextResponse.redirect(new URL("/portal/login", request.url));
+    const login = new URL("/portal/login", request.url);
+    if (pathname !== "/portal") login.searchParams.set("next", pathname);
+    return NextResponse.redirect(login);
   }
 
   const response = NextResponse.next();

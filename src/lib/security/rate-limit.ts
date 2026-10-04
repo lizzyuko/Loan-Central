@@ -10,14 +10,11 @@ import { logger } from "./logger";
  * (hashed email / hashed IP).
  */
 export const RATE_LIMITS = {
-  adminLoginByEmail: { limit: 10, windowSeconds: 15 * 60 },
-  adminLoginByIp: { limit: 30, windowSeconds: 15 * 60 },
+  loginByEmail: { limit: 10, windowSeconds: 15 * 60 },
+  loginByIp: { limit: 30, windowSeconds: 15 * 60 },
   passwordResetByEmail: { limit: 3, windowSeconds: 60 * 60 },
   passwordResetByIp: { limit: 10, windowSeconds: 60 * 60 },
   tokenRedeemByIp: { limit: 20, windowSeconds: 15 * 60 },
-  authRequestByEmail: { limit: 5, windowSeconds: 15 * 60 },
-  authRequestByIp: { limit: 20, windowSeconds: 15 * 60 },
-  authVerifyByIp: { limit: 15, windowSeconds: 15 * 60 },
   applicationSubmitByIp: { limit: 5, windowSeconds: 60 * 60 },
   uploadByIp: { limit: 40, windowSeconds: 60 * 60 },
   portalActionByApplicant: { limit: 30, windowSeconds: 10 * 60 },

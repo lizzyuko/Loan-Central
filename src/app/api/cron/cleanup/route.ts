@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull, lt, or, isNotNull } from "drizzle-orm";
 import { getDb } from "@/db";
-import { accountDetails, adminSessions, adminTokens, applicantSessions, documents } from "@/db/schema";
-import { purgeExpiredCodes } from "@/lib/auth/codes";
+import { accountDetails, adminSessions, adminTokens, applicantSessions, applicantTokens, documents } from "@/db/schema";
 import { purgeOldRateLimits } from "@/lib/security/rate-limit";
 import { recordAudit, SYSTEM_ACTOR } from "@/lib/audit";
 import { deleteAsset } from "@/lib/cloudinary/server";
@@ -14,7 +13,7 @@ import { logger } from "@/lib/security/logger";
 /**
  * Daily housekeeping (Vercel Cron, see vercel.json):
  *  - delete abandoned pre-submission uploads (> 24h)
- *  - delete expired verification codes, admin tokens, sessions and rate-limit counters
+ *  - delete expired reset/invite tokens, sessions and rate-limit counters
  *  - purge encrypted account details past their retention date
  */
 export async function GET(request: Request) {
@@ -38,9 +37,9 @@ export async function GET(request: Request) {
     }
     summary.orphanedUploads = orphans.length;
 
-    await purgeExpiredCodes();
     await purgeOldRateLimits();
     await db.delete(adminTokens).where(lt(adminTokens.expiresAt, dayAgo));
+    await db.delete(applicantTokens).where(lt(applicantTokens.expiresAt, dayAgo));
     const now = new Date();
     const deadAdmin = await db.delete(adminSessions).where(or(lt(adminSessions.expiresAt, now), isNotNull(adminSessions.revokedAt))).returning({ id: adminSessions.id });
     const deadApplicant = await db

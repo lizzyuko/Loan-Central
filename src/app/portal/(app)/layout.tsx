@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SignOut } from "@phosphor-icons/react/ssr";
 import { Logo } from "@/components/ui/Logo";
 import { requireApplicantPage } from "@/lib/auth/applicant";
@@ -12,7 +13,9 @@ export default async function PortalAppLayout({ children }: { children: React.Re
         <div className={`container ${styles.headerInner}`}>
           <Logo href="/portal" />
           <div className={styles.account}>
-            <span className={styles.email}>{applicant.email}</span>
+            <Link href="/portal/account" className={styles.email} title="Your account">
+              {applicant.email}
+            </Link>
             <form action={logoutApplicant}>
               <button type="submit" className={styles.signOut}>
                 <SignOut size={16} aria-hidden="true" /> Sign out

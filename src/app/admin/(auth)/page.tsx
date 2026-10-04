@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthCard } from "@/components/forms/AuthCard";
-import { AdminLoginForm } from "@/components/forms/AdminAuthForms";
+import { LoginForm } from "@/components/forms/PasswordAuthForms";
 import { getCurrentAdmin } from "@/lib/auth/admin";
 import { loginAdmin } from "./actions";
 
@@ -14,7 +14,8 @@ export default async function AdminLoginPage({ searchParams }: PageProps<"/admin
 
   return (
     <AuthCard title="Admin sign in" description="Authorised Loan Central staff only. Accounts are created by invitation.">
-      <AdminLoginForm
+      <LoginForm
+        basePath="/admin"
         turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ""}
         login={loginAdmin}
         notice={params.expired ? "Your session has expired. Please sign in again." : undefined}

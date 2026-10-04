@@ -33,7 +33,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Can I save and return to my application?",
     answer:
-      "Your progress is saved in this browser while you complete the form, so you can refresh or step away briefly without losing your answers. Once you submit, you can sign in to the applicant portal at any time with a one-time code sent to your email.",
+      "Your progress is saved in this browser while you complete the form, so you can refresh or step away briefly without losing your answers. When you submit, you create a password for your account, and you can then sign in to the applicant portal at any time with your email and that password.",
   },
   {
     question: "What happens if more information is required?",

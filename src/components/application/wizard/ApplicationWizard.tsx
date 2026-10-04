@@ -66,7 +66,7 @@ export function ApplicationWizard({ products, documentTypes, initialProductSlug,
   const countryCurrency = (residence && getCountry(residence)?.defaultCurrency) || "";
   const loanCurrency = data.loan?.currency || countryCurrency || "USD";
 
-  function handleSubmit(consent: Record<ConsentKey, true>, turnstileToken: string) {
+  function handleSubmit(consent: Record<ConsentKey, true>, turnstileToken: string, password: string) {
     if (!data.loan || !data.personal || !data.address || !data.employment || !data.financial) {
       setServerError("Some sections are incomplete. Please review each step.");
       return;
@@ -75,6 +75,7 @@ export function ApplicationWizard({ products, documentTypes, initialProductSlug,
     const input: ApplicationSubmissionInput = {
       idempotencyKey: state.idempotencyKey,
       turnstileToken,
+      password,
       loan: data.loan,
       personal: data.personal,
       address: data.address,

@@ -8,14 +8,17 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Feedback";
 import { Field, Input } from "@/components/ui/Field";
 import { Turnstile, type TurnstileHandle } from "./Turnstile";
-import styles from "./PasswordlessLogin.module.css";
+import styles from "./AuthForms.module.css";
 
 type AuthResult = { ok: true; redirectTo: string } | { ok: false; error: string };
 type PlainResult = { ok: true } | { ok: false; error: string };
+type Base = "/admin" | "/portal";
 
-const PASSWORD_HINT = "At least 12 characters. A short phrase of several words works well.";
+const turnstileAction = (base: Base) => (base === "/admin" ? "admin_login" : "portal_login");
 
-function PasswordInput({ id, describedBy, invalid, name, autoComplete, value, onChange }: {
+export const PASSWORD_HINT = "At least 12 characters. A short phrase of several words works well.";
+
+export function PasswordInput({ id, describedBy, invalid, name, autoComplete, value, onChange }: {
   id: string;
   describedBy?: string;
   invalid: boolean;
@@ -48,7 +51,19 @@ function PasswordInput({ id, describedBy, invalid, name, autoComplete, value, on
 
 // --- Sign in -------------------------------------------------------------------
 
-export function AdminLoginForm({ turnstileSiteKey, login, notice }: { turnstileSiteKey: string; login: (i: unknown) => Promise<AuthResult>; notice?: string }) {
+export function LoginForm({
+  basePath,
+  turnstileSiteKey,
+  login,
+  notice,
+  next,
+}: {
+  basePath: Base;
+  turnstileSiteKey: string;
+  login: (i: unknown) => Promise<AuthResult>;
+  notice?: string;
+  next?: string;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -63,7 +78,7 @@ export function AdminLoginForm({ turnstileSiteKey, login, notice }: { turnstileS
     if (!email.trim() || !password) return setError("Enter your email and password.");
     if (!token) return setError("Please complete the security check.");
     start(async () => {
-      const res = await login({ email: email.trim().toLowerCase(), password, turnstileToken: token });
+      const res = await login({ email: email.trim().toLowerCase(), password, turnstileToken: token, next });
       turnstileRef.current?.reset();
       if (!res.ok) {
         setPassword("");
@@ -88,11 +103,11 @@ export function AdminLoginForm({ turnstileSiteKey, login, notice }: { turnstileS
           <PasswordInput id={id} describedBy={describedBy} invalid={invalid} name="password" autoComplete="current-password" value={password} onChange={setPassword} />
         )}
       </Field>
-      <Turnstile ref={turnstileRef} siteKey={turnstileSiteKey} action="admin_login" onToken={setToken} />
+      <Turnstile ref={turnstileRef} siteKey={turnstileSiteKey} action={turnstileAction(basePath)} onToken={setToken} />
       <Button type="submit" size="lg" fullWidth loading={pending}>
         Sign in
       </Button>
-      <Link href="/admin/forgot-password" className={styles.back}>
+      <Link href={`${basePath}/forgot-password`} className={styles.back}>
         Forgot your password?
       </Link>
     </form>
@@ -101,7 +116,7 @@ export function AdminLoginForm({ turnstileSiteKey, login, notice }: { turnstileS
 
 // --- Forgot password -------------------------------------------------------------
 
-export function ForgotPasswordForm({ turnstileSiteKey, request }: { turnstileSiteKey: string; request: (i: unknown) => Promise<PlainResult> }) {
+export function ForgotPasswordForm({ basePath, turnstileSiteKey, request }: { basePath: Base; turnstileSiteKey: string; request: (i: unknown) => Promise<PlainResult> }) {
   const [email, setEmail] = useState("");
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,9 +128,9 @@ export function ForgotPasswordForm({ turnstileSiteKey, request }: { turnstileSit
     return (
       <div className={styles.form}>
         <Alert tone="success" title="Check your email">
-          If <strong>{email}</strong> belongs to an active administrator, we&apos;ve sent a link to reset the password. It expires in 30 minutes.
+          If an account exists for <strong>{email}</strong>, we&apos;ve sent a link to reset the password. It expires in 30 minutes.
         </Alert>
-        <Link href="/admin" className={styles.back}>
+        <Link href={basePath === "/admin" ? "/admin" : "/portal/login"} className={styles.back}>
           Back to sign in
         </Link>
       </div>
@@ -144,11 +159,11 @@ export function ForgotPasswordForm({ turnstileSiteKey, request }: { turnstileSit
           <Input id={id} type="email" aria-describedby={describedBy} invalid={invalid} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" autoFocus />
         )}
       </Field>
-      <Turnstile ref={turnstileRef} siteKey={turnstileSiteKey} action="admin_login" onToken={setToken} />
+      <Turnstile ref={turnstileRef} siteKey={turnstileSiteKey} action={turnstileAction(basePath)} onToken={setToken} />
       <Button type="submit" size="lg" fullWidth loading={pending}>
         Send reset link
       </Button>
-      <Link href="/admin" className={styles.back}>
+      <Link href={basePath === "/admin" ? "/admin" : "/portal/login"} className={styles.back}>
         Back to sign in
       </Link>
     </form>

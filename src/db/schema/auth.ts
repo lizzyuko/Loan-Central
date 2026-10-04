@@ -96,25 +96,21 @@ export const applicantSessions = pgTable(
   ],
 );
 
-export const applicantVerificationCodes = pgTable(
-  "applicant_verification_codes",
+/** Single-use, hashed password-reset tokens for applicants. */
+export const applicantTokens = pgTable(
+  "applicant_tokens",
   {
     id: id(),
     applicantId: uuid("applicant_id")
       .notNull()
       .references(() => applicants.id, { onDelete: "cascade" }),
-    codeHash: text("code_hash").notNull(),
-    linkTokenHash: text("link_token_hash").notNull(),
-    /** Where the magic link lands after sign-in (relative path, validated). */
-    redirectPath: text("redirect_path"),
+    /** "PASSWORD_RESET" */
+    purpose: text("purpose").notNull(),
+    tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    attempts: integer("attempts").notNull().default(0),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
-    ipHash: text("ip_hash"),
+    createdByAdminId: uuid("created_by_admin_id"),
     createdAt: createdAt(),
   },
-  (t) => [
-    index("applicant_codes_applicant_idx").on(t.applicantId),
-    uniqueIndex("applicant_codes_link_idx").on(t.linkTokenHash),
-  ],
+  (t) => [uniqueIndex("applicant_tokens_hash_idx").on(t.tokenHash), index("applicant_tokens_applicant_idx").on(t.applicantId)],
 );

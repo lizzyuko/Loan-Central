@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { PencilSimple } from "@phosphor-icons/react";
 import { Alert } from "@/components/ui/Feedback";
-import { Checkbox } from "@/components/ui/Field";
+import { Checkbox, Field } from "@/components/ui/Field";
+import { PASSWORD_HINT, PasswordInput } from "@/components/forms/PasswordAuthForms";
 import { Turnstile, type TurnstileHandle } from "@/components/forms/Turnstile";
 import { countryName, getCountry } from "@/config/countries";
 import { formatMoney } from "@/config/currencies";
@@ -25,7 +26,7 @@ interface Props {
   serverError: string | null;
   onEdit: (step: number) => void;
   onBack: () => void;
-  onSubmit: (consent: Record<ConsentKey, true>, turnstileToken: string) => void;
+  onSubmit: (consent: Record<ConsentKey, true>, turnstileToken: string, password: string) => void;
   turnstileRef: React.RefObject<TurnstileHandle | null>;
 }
 
@@ -97,6 +98,10 @@ export function ReviewStep({
 }: Props) {
   const [consent, setConsent] = useState<Partial<Record<ConsentKey, boolean>>>({});
   const [token, setToken] = useState<string | null>(null);
+  // Held in component state only; never written to saved progress.
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [returning, setReturning] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
 
@@ -110,12 +115,13 @@ export function ReviewStep({
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!allConsented || !token) {
+    const passwordOk = returning ? password.length > 0 : password.length >= 12 && password === confirm;
+    if (!allConsented || !token || !passwordOk) {
       setShowErrors(true);
       errorRef.current?.focus();
       return;
     }
-    onSubmit(Object.fromEntries(CONSENT_KEYS.map((k) => [k, true])) as Record<ConsentKey, true>, token);
+    onSubmit(Object.fromEntries(CONSENT_KEYS.map((k) => [k, true])) as Record<ConsentKey, true>, token, password);
   }
 
   const phone =
@@ -194,6 +200,51 @@ export function ReviewStep({
           documents.map((d) => <Row key={d.id} label={docLabel(d.documentType)} value={d.filename} />)
         )}
       </Section>
+
+      <div className={styles.consent}>
+        <h2 className={styles.sectionTitle}>{returning ? "Sign in to your account" : "Create your account"}</h2>
+        <p className={styles.disclaimer}>
+          {returning
+            ? "You've applied before. Enter the password for your existing Loan Central account to add this application to it."
+            : "You'll use your email and this password to sign in and track your application."}
+        </p>
+        {/* Lets password managers save the new credentials against the email. */}
+        <input type="email" name="username" value={data.personal?.email ?? ""} autoComplete="username" readOnly hidden />
+        <Field
+          label="Password"
+          hint={returning ? undefined : PASSWORD_HINT}
+          error={showErrors && (returning ? !password : password.length < 12) ? (returning ? "Enter your password" : "Use at least 12 characters") : undefined}
+        >
+          {({ id, describedBy, invalid }) => (
+            <PasswordInput
+              id={id}
+              describedBy={describedBy}
+              invalid={invalid}
+              name="password"
+              autoComplete={returning ? "current-password" : "new-password"}
+              value={password}
+              onChange={setPassword}
+            />
+          )}
+        </Field>
+        {!returning && (
+          <Field label="Confirm password" error={showErrors && confirm !== password ? "Passwords don't match" : undefined}>
+            {({ id, describedBy, invalid }) => (
+              <PasswordInput id={id} describedBy={describedBy} invalid={invalid} name="confirm" autoComplete="new-password" value={confirm} onChange={setConfirm} />
+            )}
+          </Field>
+        )}
+        <button
+          type="button"
+          className={styles.edit}
+          onClick={() => {
+            setReturning((r) => !r);
+            setConfirm("");
+          }}
+        >
+          {returning ? "I'm new here: create a password instead" : "Already have an account? Use your existing password"}
+        </button>
+      </div>
 
       <div className={styles.consent} ref={errorRef} tabIndex={-1}>
         <h2 className={styles.sectionTitle}>Before you submit</h2>

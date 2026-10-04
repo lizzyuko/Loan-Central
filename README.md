@@ -32,9 +32,9 @@ npm run dev                     # http://localhost:3000
 | `ENCRYPTION_KEY` | `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | `1x00000000000000000000AA` (Cloudflare test key, always passes) |
 | `TURNSTILE_SECRET_KEY` | `1x0000000000000000000000000000000AA` |
-| `DEV_EMAIL_CONSOLE` | `true`, which prints emails (invite and reset links, portal sign-in codes) to the terminal while Resend isn't configured. **Development only.** It is ignored in production. |
+| `DEV_EMAIL_CONSOLE` | `true`, which prints emails (invite and password-reset links) to the terminal while Resend isn't configured. **Development only.** It is ignored in production. |
 
-Then sign in at `/admin` as `super.admin@loancentral.test` (super admin) or `reviewer@loancentral.test` (admin), password `loan-central-dev-only`. These demo accounts exist only with `--dev` and are refused in production.
+Then sign in at `/admin` as `super.admin@loancentral.test` (super admin) or `reviewer@loancentral.test` (admin), or at `/portal/login` as any sample applicant (e.g. `amara.okafor@example.com`). The password for all of them is `loan-central-dev-only`. These demo accounts exist only with `--dev` and are refused in production.
 
 Document uploads need Cloudinary credentials, even locally.
 
@@ -121,7 +121,7 @@ There's nothing to set up. Limits are counted in the `rate_limits` table in Post
    - writes the application in one transaction
    - generates a random `LC-YYYY-NNNNNN` reference
    - emails the applicant and the admins
-4. Applicants track progress at `/portal`, signing in with a one-time code or magic link. There they can answer information requests and, once invited, submit account details.
+4. Applicants create a password on the final step of the application and are signed straight into `/portal`, where they track progress, answer information requests and, once invited, submit account details. A returning applicant enters their existing password to add a new application to their account. **Forgot your password?** sends a reset link by email.
 
 **Administrators**
 1. They sign in at `/admin` with email and password. Accounts are created only by invitation from a super admin.
@@ -140,7 +140,7 @@ There's nothing to set up. Limits are counted in the `rate_limits` table in Post
 ## Security summary
 
 - **Admins:** passwords are hashed with scrypt. The account locks for 15 minutes after 5 failures. Invite and reset tokens are single-use, hashed and short-lived, and a reset revokes all sessions.
-- **Applicants:** passwordless sign-in with hashed, single-use, 10-minute codes, limited to 5 attempts.
+- **Applicants:** the same password protections as admins. A submission can only be attached to an existing account if the correct password is given, so nobody can change another person's details.
 - Sign-in is rate-limited and protected by Turnstile. Error messages are generic, so they don't reveal which emails exist.
 - Sessions are stored in the database with HTTP-only `SameSite=Lax` cookies (`Secure` in production). They have absolute and idle expiry, and logout revokes them.
 - Every page, action and route handler re-checks authorization through the data access layer. `proxy.ts` only does an optimistic redirect.

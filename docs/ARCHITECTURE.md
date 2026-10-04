@@ -24,7 +24,7 @@ Two completely separate identity domains with separate tables, cookies and sessi
 | | Admin | Applicant |
 | --- | --- | --- |
 | Identity | Row in `admins`: the first is seeded from `SEED_ADMIN_*`, the rest are invited by a super admin | Row in `applicants`, created on first submission |
-| Login | `/admin` → email + password (scrypt). Invites and resets use emailed single-use links. | `/portal/login` → email → 6-digit code **or** magic link |
+| Login | `/admin` → email + password (scrypt). Invites and resets use emailed single-use links. | `/portal/login` → email + password, created on the final wizard step. Resets use emailed single-use links. |
 | Cookie | `lc_admin_session` | `lc_applicant_session` |
 | Lifetime | 12 h absolute, 2 h idle | 2 h absolute, 30 min idle |
 
@@ -37,14 +37,10 @@ Two completely separate identity domains with separate tables, cookies and sessi
 - `admin_tokens` holds INVITE tokens (7 days) and PASSWORD_RESET tokens (30 minutes). They are 256-bit, stored as SHA-256, and single-use (an atomic conditional update).
 - Redeeming a token sets the password, revokes every session, and signs the admin in. A reset also emails a "password changed" notice.
 
-**Applicant verification codes** (`applicant_verification_codes`):
-
-- 6-digit numeric code + separate 256-bit link token, generated with `crypto.randomInt` / `randomBytes`.
-- Stored only as `HMAC-SHA256(SESSION_SECRET, purpose|email|value)`. Never stored or logged in plaintext.
-- Expire after 10 minutes, single use (`consumed_at`), max 5 attempts, and issuing a new code invalidates the old ones.
-- Requesting a code is rate limited per email and per IP, and needs Turnstile.
-- Responses are always generic ("If that email is registered, we've sent a code") so emails can't be enumerated.
-- The magic link opens a confirmation page that **POSTs** the token, so email link scanners can't burn it with a GET.
+**Applicant accounts:** the same password, lockout and reset rules as admins (`applicant_tokens` holds PASSWORD_RESET tokens). The account is created at submission:
+- **New email:** the password must meet the policy, and the account is created in the same transaction as the application.
+- **Existing email:** the submitted password must match the account, otherwise the submission is refused, so nobody can attach applications to or overwrite another person's account.
+- **Existing email with no password** (created before passwords existed): the person must use the emailed reset link first.
 
 **Sessions** (`admin_sessions`, `applicant_sessions`): a random 256-bit token goes in an HTTP-only, `SameSite=Lax` cookie (`Secure` in production). Only its SHA-256 hash is stored. Sessions are revocable (logout sets `revoked_at`), and idle expiry is extended on use.
 

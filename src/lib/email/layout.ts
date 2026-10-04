@@ -54,12 +54,6 @@ export function button(label: string, href: string): string {
 </td></tr></table>`;
 }
 
-export function codeBlock(code: string): string {
-  return `<div style="margin:8px 0 24px;padding:18px;background:${C.soft};border-radius:12px;text-align:center;">
-<span style="font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:32px;font-weight:700;letter-spacing:8px;color:${C.text};">${escapeHtml(code)}</span>
-</div>`;
-}
-
 export function detailRows(rows: Array<[string, string]>): string {
   const body = rows
     .map(
@@ -88,7 +82,7 @@ interface LayoutOptions {
 export function renderLayout({ preheader, heading, body, footnote }: LayoutOptions): string {
   const footer =
     footnote ??
-    `Submitting an application does not guarantee approval or a loan offer. ${siteConfig.name} will never ask you for a password, verification code or bank details by email or phone.`;
+    `Submitting an application does not guarantee approval or a loan offer. ${siteConfig.name} will never ask you for your password or bank details by email or phone.`;
   return `<!doctype html>
 <html lang="en">
 <head>

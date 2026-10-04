@@ -22,6 +22,20 @@
       "when": 1791134545522,
       "tag": "0002_drop_admin_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791135990980,
+      "tag": "0003_applicant_passwords",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791135994688,
+      "tag": "0004_drop_applicant_codes",
+      "breakpoints": true
     }
   ]
 }
