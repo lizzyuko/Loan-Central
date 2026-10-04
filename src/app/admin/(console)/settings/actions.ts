@@ -11,6 +11,7 @@ import { loanSettingsSchema } from "@/lib/validation/loans";
 import { AuthError, requireAdmin } from "@/lib/auth/admin";
 import type { Permission } from "@/lib/auth/permissions";
 import { createAdmin, resendInvite, saveDocumentType, saveProduct, SettingsError, updateAdmin } from "@/lib/admin/settings";
+import { ConfigurationError } from "@/lib/env";
 import { logger } from "@/lib/security/logger";
 import { adminCreateSchema, adminIdSchema, adminUpdateSchema, documentTypeSchema, productSchema } from "@/lib/validation/settings";
 
@@ -34,6 +35,15 @@ async function run<S extends z.ZodType>(
     return { ok: true, message };
   } catch (err) {
     if (err instanceof AuthError || err instanceof SettingsError) return { ok: false, error: err.message };
+    if (err instanceof ConfigurationError) {
+      logger.error("Settings action blocked by server configuration", { message: err.message });
+      return {
+        ok: false,
+        error: /ENCRYPTION_KEY/.test(err.message)
+          ? "The server's ENCRYPTION_KEY is missing or invalid, so credentials can't be stored securely. Add a 32-byte base64 ENCRYPTION_KEY in Vercel's environment variables, redeploy, then try again."
+          : `Server configuration problem: ${err.message}`,
+      };
+    }
     logger.error("Settings action failed", { err });
     return { ok: false, error: "Something went wrong. Please try again." };
   }
@@ -79,14 +89,16 @@ export async function saveDocumentTypeAction(raw: unknown) {
 
 export async function saveEmailSettingsAction(raw: unknown) {
   return run("settings.manage", emailSettingsInputSchema, raw, "/admin/settings/email", async (a, i) => {
+    let active: string | null;
     try {
-      await saveEmailSettings(i, a.id);
+      active = await saveEmailSettings(i, a.id);
     } catch (err) {
       if (err instanceof Error && /before selecting/.test(err.message)) throw new SettingsError(err.message);
       throw err;
     }
     await recordAudit({ actor: { type: "ADMIN", adminId: a.id }, action: "settings.email_updated", metadata: { activeProvider: i.activeProvider, fallback: i.fallbackEnabled } });
-    return "Email settings saved.";
+    if (!active) return "Email settings saved. No provider is active yet: select Resend or Zoho under Sending to start sending email.";
+    return `Email settings saved. ${active === "zoho" ? "Zoho Mail" : "Resend"} is the active provider.`;
   });
 }
 

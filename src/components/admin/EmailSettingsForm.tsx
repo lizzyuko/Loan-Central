@@ -45,21 +45,27 @@ export function EmailSettingsForm({ view, zohoHosts, envFallback }: Props) {
     });
   }
 
+  // Entering a provider's credentials while nothing is selected selects it.
+  function touch(provider: EmailProvider) {
+    if (active === "") setActive(provider);
+  }
+
+  const currentInput = () => ({
+    activeProvider: active || null,
+    fallbackEnabled: fallback,
+    replyTo,
+    resendFrom,
+    resendApiKey,
+    zohoHost,
+    zohoPort: Number(zohoPort),
+    zohoUser,
+    zohoFrom,
+    zohoPassword,
+  });
+
   function save() {
     run(
-      () =>
-        saveEmailSettingsAction({
-          activeProvider: active || null,
-          fallbackEnabled: fallback,
-          replyTo,
-          resendFrom,
-          resendApiKey,
-          zohoHost,
-          zohoPort: Number(zohoPort),
-          zohoUser,
-          zohoFrom,
-          zohoPassword,
-        }),
+      () => saveEmailSettingsAction(currentInput()),
       () => {
         setResendApiKey("");
         setZohoPassword("");
@@ -67,14 +73,30 @@ export function EmailSettingsForm({ view, zohoHosts, envFallback }: Props) {
     );
   }
 
+  /** Saves the form first, so a test always uses what's on screen. */
+  function test(provider: EmailProvider) {
+    run(
+      async () => {
+        const saved = await saveEmailSettingsAction(currentInput());
+        if (!saved.ok) return saved;
+        setResendApiKey("");
+        setZohoPassword("");
+        return testEmailAction({ provider });
+      },
+    );
+  }
+
+  const resendReady = view.resend.configured || (resendApiKey !== "" && resendFrom !== "");
+  const zohoReady = view.zoho.configured || (zohoPassword !== "" && zohoUser !== "" && zohoFrom !== "");
+
   return (
     <div className={styles.stack}>
       {error && <Alert tone="danger">{error}</Alert>}
       {!view.activeProvider && (
-        <Alert tone={envFallback ? "info" : "warning"} title="No provider selected">
+        <Alert tone={envFallback ? "info" : "warning"} title="No email provider is active yet">
           {envFallback
-            ? "Emails are currently sent with the Resend settings from your environment variables. Configure a provider below to manage email from here."
-            : "Emails can't be sent until you configure and select a provider below."}
+            ? "Emails are currently sent with the Resend settings from your environment variables. Set up a provider below to manage email from here."
+            : "Enter your Resend or Zoho details below, make sure it's selected under Sending, then click Save (or Send test email)."}
         </Alert>
       )}
 
@@ -112,16 +134,16 @@ export function EmailSettingsForm({ view, zohoHosts, envFallback }: Props) {
         </div>
         <div className={styles.grid2}>
           <Field label="From address" hint="Must be on a domain verified in Resend, e.g. Loan Central <noreply@yourdomain.com>">
-            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={resendFrom} onChange={(e) => setResendFrom(e.target.value)} />}
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={resendFrom} onChange={(e) => { setResendFrom(e.target.value); touch("resend"); }} />}
           </Field>
           <Field label="API key" hint={view.resend.apiKeyHint ? `Saved key ${view.resend.apiKeyHint}. Leave blank to keep it.` : "Starts with re_"}>
             {({ id, describedBy }) => (
-              <Input id={id} aria-describedby={describedBy} type="password" autoComplete="off" value={resendApiKey} onChange={(e) => setResendApiKey(e.target.value)} placeholder={view.resend.apiKeyHint ?? "re_..."} />
+              <Input id={id} aria-describedby={describedBy} type="password" autoComplete="off" value={resendApiKey} onChange={(e) => { setResendApiKey(e.target.value); touch("resend"); }} placeholder={view.resend.apiKeyHint ?? "re_..."} />
             )}
           </Field>
         </div>
         <div className={styles.inlineRow}>
-          <Button size="sm" variant="secondary" disabled={!view.resend.configured || pending} onClick={() => run(() => testEmailAction({ provider: "resend" }))}>
+          <Button size="sm" variant="secondary" disabled={!resendReady || pending} onClick={() => test("resend")}>
             Send test email
           </Button>
           {view.resend.configured && (
@@ -159,19 +181,19 @@ export function EmailSettingsForm({ view, zohoHosts, envFallback }: Props) {
             )}
           </Field>
           <Field label="Username" hint="Your full Zoho email address">
-            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="email" autoComplete="off" value={zohoUser} onChange={(e) => setZohoUser(e.target.value)} />}
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} type="email" autoComplete="off" value={zohoUser} onChange={(e) => { setZohoUser(e.target.value); touch("zoho"); }} />}
           </Field>
           <Field label="App password" hint={view.zoho.passwordHint ? `Saved password ${view.zoho.passwordHint}. Leave blank to keep it.` : undefined}>
             {({ id, describedBy }) => (
-              <Input id={id} aria-describedby={describedBy} type="password" autoComplete="new-password" value={zohoPassword} onChange={(e) => setZohoPassword(e.target.value)} placeholder={view.zoho.passwordHint ?? ""} />
+              <Input id={id} aria-describedby={describedBy} type="password" autoComplete="new-password" value={zohoPassword} onChange={(e) => { setZohoPassword(e.target.value); touch("zoho"); }} placeholder={view.zoho.passwordHint ?? ""} />
             )}
           </Field>
           <Field label="From address" hint="e.g. Loan Central <noreply@yourdomain.com>">
-            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={zohoFrom} onChange={(e) => setZohoFrom(e.target.value)} />}
+            {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={zohoFrom} onChange={(e) => { setZohoFrom(e.target.value); touch("zoho"); }} />}
           </Field>
         </div>
         <div className={styles.inlineRow}>
-          <Button size="sm" variant="secondary" disabled={!view.zoho.configured || pending} onClick={() => run(() => testEmailAction({ provider: "zoho" }))}>
+          <Button size="sm" variant="secondary" disabled={!zohoReady || pending} onClick={() => test("zoho")}>
             Send test email
           </Button>
           {view.zoho.configured && (
@@ -187,7 +209,7 @@ export function EmailSettingsForm({ view, zohoHosts, envFallback }: Props) {
           Save email settings
         </Button>
         <p className={styles.help} style={{ marginTop: "var(--space-2)" }}>
-          Save first, then use &quot;Send test email&quot; to check each provider. Secrets are encrypted and never shown again.
+          &quot;Send test email&quot; saves your changes and sends a test to your own address. Secrets are encrypted and never shown again.
         </p>
       </div>
     </div>

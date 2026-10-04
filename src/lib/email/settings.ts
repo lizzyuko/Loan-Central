@@ -170,7 +170,8 @@ export const emailSettingsInputSchema = z
 
 export type EmailSettingsInput = z.output<typeof emailSettingsInputSchema>;
 
-export async function saveEmailSettings(input: EmailSettingsInput, adminId: string): Promise<void> {
+/** Saves settings and returns the provider that ends up active. */
+export async function saveEmailSettings(input: EmailSettingsInput, adminId: string): Promise<EmailProvider | null> {
   const { stored } = await loadStored();
   const next: Stored = {
     activeProvider: input.activeProvider,
@@ -190,6 +191,11 @@ export async function saveEmailSettings(input: EmailSettingsInput, adminId: stri
       from: input.zohoFrom || null,
     },
   };
+  // Nothing selected but exactly one provider is set up: use it.
+  const resendReady = Boolean(next.resend.apiKeyEnc && next.resend.from);
+  const zohoReady = Boolean(next.zoho.passwordEnc && next.zoho.user && next.zoho.from);
+  if (!next.activeProvider && resendReady !== zohoReady) next.activeProvider = resendReady ? "resend" : "zoho";
+
   if (next.activeProvider === "resend" && !next.resend.apiKeyEnc) throw new Error("Add a Resend API key before selecting Resend.");
   if (next.activeProvider === "zoho" && !next.zoho.passwordEnc) throw new Error("Add the Zoho app password before selecting Zoho.");
 
@@ -198,6 +204,7 @@ export async function saveEmailSettings(input: EmailSettingsInput, adminId: stri
     .values({ key: SETTINGS_KEY, value: next, updatedByAdminId: adminId })
     .onConflictDoUpdate({ target: systemSettings.key, set: { value: next, updatedByAdminId: adminId, updatedAt: new Date() } });
   clearEmailConfigCache();
+  return next.activeProvider;
 }
 
 /** Remove a provider's stored secret entirely. */
