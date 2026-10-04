@@ -1,0 +1,40 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.logo:hover {
+  color: var(--color-text);
+}
+
+.mark {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.word {
+  font-size: 1.0625rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+}
+
+.light {
+  font-weight: var(--weight-regular);
+  color: var(--color-text-secondary);
+}
+
+.logo[data-inverse] {
+  color: var(--color-ink-text);
+}
+
+.logo[data-inverse] .mark {
+  color: var(--color-ink-text);
+  --logo-fg: var(--color-ink);
+}
+
+.logo[data-inverse] .light {
+  color: var(--color-ink-muted);
+}

@@ -1,0 +1,25 @@
+/* Shared section rhythm for marketing pages. */
+.section {
+  padding-block: var(--section-y);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 640px;
+  margin-bottom: clamp(var(--space-10), 5vw, var(--space-16));
+}
+
+.heading {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.03em;
+}
+
+.intro {
+  max-width: 60ch;
+  font-size: var(--text-md);
+  color: var(--color-text-secondary);
+}
