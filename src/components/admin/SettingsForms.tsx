@@ -7,6 +7,7 @@ import { LOAN_PURPOSES } from "@/config/site";
 import { ROLE_LABELS } from "@/lib/auth/permissions";
 import {
   createAdminAction,
+  resendInviteAction,
   saveDocumentTypeAction,
   saveProductAction,
   updateAdminAction,
@@ -35,7 +36,7 @@ export function AddAdminForm() {
           </div>
           <div>
             <Button type="submit" size="sm" loading={pending}>
-              Add administrator
+              Send invitation
             </Button>
           </div>
         </>
@@ -68,6 +69,18 @@ export function AdminRowForm({ adminId, role, isActive, isSelf }: { adminId: str
             Save
           </Button>
         </>
+      )}
+    </ActionForm>
+  );
+}
+
+export function ResendInviteButton({ adminId }: { adminId: string }) {
+  return (
+    <ActionForm action={resendInviteAction} className={styles.inlineRow} toInput={() => ({ adminId })}>
+      {(pending) => (
+        <Button type="submit" size="sm" variant="ghost" loading={pending}>
+          Resend invite
+        </Button>
       )}
     </ActionForm>
   );

@@ -1,11 +1,12 @@
 import "server-only";
-import { asc, count, desc, eq, type SQL } from "drizzle-orm";
+import { asc, count, desc, eq, sql, type SQL } from "drizzle-orm";
 import type { z } from "zod";
 import { getDb } from "@/db";
 import { isUniqueViolation } from "@/db/errors";
 import { admins, applications, auditLogs, documentTypes, loanProducts } from "@/db/schema";
 import { recordAudit } from "@/lib/audit";
 import type { CurrentAdmin } from "@/lib/auth/admin";
+import { sendInvite } from "@/lib/auth/admin-auth";
 import { revokeAllSessions } from "@/lib/auth/session";
 import type { adminCreateSchema, adminUpdateSchema, documentTypeSchema, productSchema } from "@/lib/validation/settings";
 
@@ -17,19 +18,40 @@ const actor = (a: CurrentAdmin) => ({ type: "ADMIN" as const, adminId: a.id });
 
 export function listAdmins() {
   return getDb()
-    .select({ id: admins.id, email: admins.email, name: admins.name, role: admins.role, isActive: admins.isActive, lastLoginAt: admins.lastLoginAt })
+    .select({
+      id: admins.id,
+      email: admins.email,
+      name: admins.name,
+      role: admins.role,
+      isActive: admins.isActive,
+      lastLoginAt: admins.lastLoginAt,
+      activated: sql<boolean>`${admins.passwordHash} is not null`,
+    })
     .from(admins)
     .orderBy(asc(admins.name));
 }
 
-export async function createAdmin(by: CurrentAdmin, input: z.output<typeof adminCreateSchema>) {
+/** Creates the admin (no password yet) and emails them an invitation. */
+export async function createAdmin(by: CurrentAdmin, input: z.output<typeof adminCreateSchema>): Promise<string> {
+  let id: string | undefined;
   try {
-    const [row] = await getDb().insert(admins).values(input).returning({ id: admins.id });
-    await recordAudit({ actor: actor(by), action: "admin.created", targetType: "admin", targetId: row?.id, metadata: { role: input.role } });
+    const [row] = await getDb().insert(admins).values({ ...input, invitedByAdminId: by.id }).returning({ id: admins.id });
+    id = row?.id;
+    await recordAudit({ actor: actor(by), action: "admin.created", targetType: "admin", targetId: id, metadata: { role: input.role } });
   } catch (err) {
     if (isUniqueViolation(err)) throw new SettingsError("An administrator with that email already exists.");
     throw err;
   }
+  if (!id) throw new Error("Admin insert failed");
+  return sendInvite(id, { id: by.id, name: by.name });
+}
+
+export async function resendInvite(by: CurrentAdmin, adminId: string): Promise<string> {
+  const [target] = await getDb().select({ passwordHash: admins.passwordHash, isActive: admins.isActive }).from(admins).where(eq(admins.id, adminId));
+  if (!target) throw new SettingsError("Administrator not found.");
+  if (target.passwordHash) throw new SettingsError("This administrator has already activated their account.");
+  if (!target.isActive) throw new SettingsError("Reactivate this administrator before re-sending the invitation.");
+  return sendInvite(adminId, { id: by.id, name: by.name });
 }
 
 export async function updateAdmin(by: CurrentAdmin, input: z.output<typeof adminUpdateSchema>) {

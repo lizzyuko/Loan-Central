@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * access layer (src/lib/auth) on every page, action and route handler.
  */
 
-const ADMIN_PUBLIC = new Set(["/admin", "/admin/verify"]);
+const ADMIN_PUBLIC = new Set(["/admin", "/admin/forgot-password", "/admin/reset-password", "/admin/accept-invite"]);
 const PORTAL_PUBLIC = new Set(["/portal/login", "/portal/verify"]);
 
 export function proxy(request: NextRequest) {

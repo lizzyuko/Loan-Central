@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { adminVerificationCodes, applicantVerificationCodes } from "@/db/schema";
+import { applicantVerificationCodes } from "@/db/schema";
 import { generateNumericCode, generateToken, hmac, safeEqual, sha256 } from "@/lib/security/crypto";
 
 /**
@@ -9,15 +9,15 @@ import { generateNumericCode, generateToken, hmac, safeEqual, sha256 } from "@/l
  * - stored only as keyed hashes; never logged
  * - expire after CODE_TTL_MINUTES, single use, MAX_ATTEMPTS wrong guesses
  * - issuing a new code invalidates any outstanding ones
+ * Used for applicant sign-in only (admins use passwords).
  */
 
-export type CodeKind = "admin" | "applicant";
+export type CodeKind = "applicant";
 
 export const CODE_TTL_MINUTES = 10;
 export const MAX_ATTEMPTS = 5;
 
 const tables = {
-  admin: { table: adminVerificationCodes, userColumn: adminVerificationCodes.adminId },
   applicant: { table: applicantVerificationCodes, userColumn: applicantVerificationCodes.applicantId },
 } as const;
 
@@ -46,8 +46,7 @@ export async function issueCode(kind: CodeKind, userId: string, opts: { ipHash: 
       expiresAt: new Date(now.getTime() + CODE_TTL_MINUTES * 60_000),
       ipHash: opts.ipHash,
     };
-    if (kind === "admin") await tx.insert(adminVerificationCodes).values({ ...values, adminId: userId });
-    else await tx.insert(applicantVerificationCodes).values({ ...values, applicantId: userId, redirectPath: opts.redirectPath ?? null });
+    await tx.insert(applicantVerificationCodes).values({ ...values, applicantId: userId, redirectPath: opts.redirectPath ?? null });
   });
   return { code, linkToken };
 }
@@ -113,21 +112,16 @@ async function consume(kind: CodeKind, id: string, userId: string): Promise<Veri
     .returning({ id: table.id });
   if (updated.length === 0) return { ok: false, reason: "invalid" };
 
-  let redirectPath: string | null = null;
-  if (kind === "applicant") {
-    const [r] = await getDb()
-      .select({ redirectPath: applicantVerificationCodes.redirectPath })
-      .from(applicantVerificationCodes)
-      .where(eq(applicantVerificationCodes.id, id));
-    redirectPath = r?.redirectPath ?? null;
-  }
-  return { ok: true, userId, redirectPath };
+  const [r] = await getDb()
+    .select({ redirectPath: applicantVerificationCodes.redirectPath })
+    .from(applicantVerificationCodes)
+    .where(eq(applicantVerificationCodes.id, id));
+  return { ok: true, userId, redirectPath: r?.redirectPath ?? null };
 }
 
 /** Housekeeping: delete codes that expired over a day ago. */
 export async function purgeExpiredCodes(): Promise<void> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  await getDb().delete(adminVerificationCodes).where(lt(adminVerificationCodes.expiresAt, cutoff));
   await getDb().delete(applicantVerificationCodes).where(lt(applicantVerificationCodes.expiresAt, cutoff));
 }
 

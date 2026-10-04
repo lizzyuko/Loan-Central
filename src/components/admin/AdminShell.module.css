@@ -137,3 +137,13 @@
     padding: var(--space-8) var(--space-10) var(--space-16);
   }
 }
+
+.userInfo {
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-sm);
+}
+
+.userInfo:hover .userName {
+  color: var(--color-primary);
+}

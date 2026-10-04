@@ -22,8 +22,10 @@ describe.skipIf(!RUN)("integration", async () => {
   const schema = await import("@/db/schema");
   const { __setTransport } = await import("@/lib/email/client");
   const { submitApplication } = await import("@/lib/application/submit");
-  const { requestLoginCode, verifyLoginCode } = await import("@/lib/auth/login");
+  const { requestLoginCode } = await import("@/lib/auth/login");
   const { issueCode, verifyCode, MAX_ATTEMPTS } = await import("@/lib/auth/codes");
+  const { loginWithPassword, requestPasswordReset, redeemToken, sendInvite, MAX_FAILED_LOGINS } = await import("@/lib/auth/admin-auth");
+  const { hashPassword } = await import("@/lib/auth/password");
   const { getCurrentAdmin, requireAdmin, AuthError } = await import("@/lib/auth/admin");
   const { getOwnedApplicationId } = await import("@/lib/auth/applicant");
   const { getPortalApplication, submitAccountDetails, PortalError } = await import("@/lib/portal/service");
@@ -49,7 +51,7 @@ describe.skipIf(!RUN)("integration", async () => {
   beforeEach(async () => {
     sent.length = 0;
     asBrowser();
-    await db.execute(sql`TRUNCATE admins, applicants, applications, loan_products, document_types, audit_logs, communications CASCADE`);
+    await db.execute(sql`TRUNCATE admins, applicants, applications, loan_products, document_types, audit_logs, communications, rate_limits CASCADE`);
     await db.insert(schema.documentTypes).values([
       { key: "government_id", label: "ID", description: "ID" },
       { key: "proof_of_income", label: "Income", description: "Income" },
@@ -81,18 +83,29 @@ describe.skipIf(!RUN)("integration", async () => {
     return submitApplication({ ...validSubmission, idempotencyKey: crypto.randomUUID(), documents: { documentIds: ids }, ...overrides }, { ctx, draftTokenHash: draftHash });
   }
 
-  async function makeAdmin(role: "ADMIN" | "SUPER_ADMIN", email = `${role.toLowerCase()}@test.dev`) {
-    const [a] = await db.insert(schema.admins).values({ email, name: role, role }).returning();
+  const PASSWORD = "river-lantern-copper-71";
+
+  async function makeAdmin(role: "ADMIN" | "SUPER_ADMIN", email = `${role.toLowerCase()}@test.dev`, withPassword = true) {
+    const [a] = await db
+      .insert(schema.admins)
+      .values({ email, name: role, role, passwordHash: withPassword ? await hashPassword(PASSWORD) : null })
+      .returning();
     return a!;
   }
 
   async function signInAdmin(adminId: string) {
     asBrowser();
-    const { code } = await issueCode("admin", adminId, { ipHash: null });
     const [a] = await db.select().from(schema.admins).where(eq(schema.admins.id, adminId));
-    const res = await verifyLoginCode({ kind: "admin", email: a!.email, code, ctx });
+    const res = await loginWithPassword({ email: a!.email, password: PASSWORD, turnstileToken: "ok", ctx });
     expect(res.ok).toBe(true);
     return snapshotCookies();
+  }
+
+  /** Pull the token out of the most recent emailed link. */
+  function tokenFromLastEmail(): string {
+    const match = sent.at(-1)?.text.match(/token=([A-Za-z0-9_%-]+)/);
+    if (!match?.[1]) throw new Error("No token link in last email");
+    return decodeURIComponent(match[1]);
   }
 
   // --- Submission ----------------------------------------------------------------
@@ -141,30 +154,93 @@ describe.skipIf(!RUN)("integration", async () => {
 
   // --- Admin authentication -----------------------------------------------------------
 
-  it("sends codes only to authorised admins, with generic responses", async () => {
+  it("signs admins in with a password and rejects wrong or unknown credentials generically", async () => {
     await makeAdmin("ADMIN", "staff@test.dev");
-    expect(await requestLoginCode({ kind: "admin", email: "stranger@test.dev", turnstileToken: "ok", ctx })).toEqual({ ok: true });
-    expect(await requestLoginCode({ kind: "admin", email: "staff@test.dev", turnstileToken: "ok", ctx })).toEqual({ ok: true });
-    await flushAfter();
-    expect(sent.map((s) => s.to)).toEqual(["staff@test.dev"]);
-    expect(await db.select().from(schema.admins)).toHaveLength(1); // no account created for the stranger
+    const wrong = await loginWithPassword({ email: "staff@test.dev", password: "not-the-password-1", turnstileToken: "ok", ctx });
+    const unknown = await loginWithPassword({ email: "stranger@test.dev", password: PASSWORD, turnstileToken: "ok", ctx });
+    expect(wrong).toEqual(unknown); // same message: no account enumeration
+    expect((await loginWithPassword({ email: "staff@test.dev", password: PASSWORD, turnstileToken: "bad-token", ctx })).ok).toBe(false);
+    expect((await loginWithPassword({ email: "staff@test.dev", password: PASSWORD, turnstileToken: "ok", ctx })).ok).toBe(true);
   });
 
-  it("enforces single use, expiry and attempt limits on codes", async () => {
-    const admin = await makeAdmin("ADMIN");
-    const { code } = await issueCode("admin", admin.id, { ipHash: null });
-    expect((await verifyCode("admin", admin.id, code)).ok).toBe(true);
-    expect((await verifyCode("admin", admin.id, code)).ok).toBe(false); // single use
+  it("locks the account after repeated failures", async () => {
+    await makeAdmin("ADMIN", "lock@test.dev");
+    for (let i = 0; i < MAX_FAILED_LOGINS; i++) {
+      await loginWithPassword({ email: "lock@test.dev", password: "wrong-password-xx", turnstileToken: "ok", ctx });
+    }
+    const res = await loginWithPassword({ email: "lock@test.dev", password: PASSWORD, turnstileToken: "ok", ctx });
+    expect(res.ok).toBe(false);
+    const [row] = await db.select().from(schema.admins).where(eq(schema.admins.email, "lock@test.dev"));
+    expect(row!.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
+  });
 
-    const second = await issueCode("admin", admin.id, { ipHash: null });
-    await db.update(schema.adminVerificationCodes).set({ expiresAt: new Date(Date.now() - 1000) });
-    expect(await verifyCode("admin", admin.id, second.code)).toEqual({ ok: false, reason: "expired" });
+  it("invites an admin who sets their own password; invite links are single use", async () => {
+    const inviter = await makeAdmin("SUPER_ADMIN");
+    const invitee = await makeAdmin("ADMIN", "new@test.dev", false);
+    await sendInvite(invitee.id, { id: inviter.id, name: "Inviter" });
+    const token = tokenFromLastEmail();
+    expect(sent.at(-1)?.to).toBe("new@test.dev");
 
-    const third = await issueCode("admin", admin.id, { ipHash: null });
+    // Cannot sign in before accepting.
+    expect((await loginWithPassword({ email: "new@test.dev", password: PASSWORD, turnstileToken: "ok", ctx })).ok).toBe(false);
+
+    asBrowser();
+    expect((await redeemToken({ purpose: "INVITE", token, password: PASSWORD, ctx })).ok).toBe(true);
+    expect((await getCurrentAdmin())?.id).toBe(invitee.id);
+    expect((await redeemToken({ purpose: "INVITE", token, password: PASSWORD, ctx })).ok).toBe(false);
+    // An invite token is not usable as a reset token.
+    expect((await redeemToken({ purpose: "PASSWORD_RESET", token, password: PASSWORD, ctx })).ok).toBe(false);
+  });
+
+  it("resets a password by email, revoking existing sessions; unknown emails get no email", async () => {
+    const admin = await makeAdmin("ADMIN", "reset@test.dev");
+    const oldSession = await signInAdmin(admin.id);
+
+    expect(await requestPasswordReset({ email: "nobody@test.dev", turnstileToken: "ok", ctx })).toEqual({ ok: true });
+    expect(await requestPasswordReset({ email: "reset@test.dev", turnstileToken: "ok", ctx })).toEqual({ ok: true });
+    await flushAfter();
+    expect(sent.map((m) => m.to)).toEqual(["reset@test.dev"]);
+    const token = tokenFromLastEmail();
+
+    // Expired tokens fail.
+    await db.update(schema.adminTokens).set({ expiresAt: new Date(Date.now() - 1000) });
+    expect((await redeemToken({ purpose: "PASSWORD_RESET", token, password: "a-brand-new-password-9", ctx })).ok).toBe(false);
+
+    await requestPasswordReset({ email: "reset@test.dev", turnstileToken: "ok", ctx });
+    await flushAfter();
+    const fresh = tokenFromLastEmail();
+    asBrowser();
+    expect((await redeemToken({ purpose: "PASSWORD_RESET", token: fresh, password: "a-brand-new-password-9", ctx })).ok).toBe(true);
+
+    asBrowser(oldSession);
+    expect(await getCurrentAdmin()).toBeNull(); // old session revoked
+    expect((await loginWithPassword({ email: "reset@test.dev", password: PASSWORD, turnstileToken: "ok", ctx })).ok).toBe(false);
+    expect((await loginWithPassword({ email: "reset@test.dev", password: "a-brand-new-password-9", turnstileToken: "ok", ctx })).ok).toBe(true);
+  });
+
+  it("enforces single use, expiry and attempt limits on applicant codes", async () => {
+    const app = (await submit()).created!;
+    const [applicant] = await db.select().from(schema.applicants).where(eq(schema.applicants.email, app.email));
+    const id = applicant!.id;
+    const { code } = await issueCode("applicant", id, { ipHash: null });
+    expect((await verifyCode("applicant", id, code)).ok).toBe(true);
+    expect((await verifyCode("applicant", id, code)).ok).toBe(false); // single use
+
+    const second = await issueCode("applicant", id, { ipHash: null });
+    await db.update(schema.applicantVerificationCodes).set({ expiresAt: new Date(Date.now() - 1000) });
+    expect(await verifyCode("applicant", id, second.code)).toEqual({ ok: false, reason: "expired" });
+
+    const third = await issueCode("applicant", id, { ipHash: null });
     const wrong = third.code === "000000" ? "111111" : "000000";
-    for (let i = 0; i < MAX_ATTEMPTS - 1; i++) expect((await verifyCode("admin", admin.id, wrong)).ok).toBe(false);
-    expect(await verifyCode("admin", admin.id, wrong)).toEqual({ ok: false, reason: "too_many_attempts" });
-    expect((await verifyCode("admin", admin.id, third.code)).ok).toBe(false); // burned
+    for (let i = 0; i < MAX_ATTEMPTS - 1; i++) expect((await verifyCode("applicant", id, wrong)).ok).toBe(false);
+    expect(await verifyCode("applicant", id, wrong)).toEqual({ ok: false, reason: "too_many_attempts" });
+    expect((await verifyCode("applicant", id, third.code)).ok).toBe(false); // burned
+
+    // Unknown applicant emails receive nothing.
+    sent.length = 0;
+    expect(await requestLoginCode({ email: "stranger@test.dev", turnstileToken: "ok", ctx })).toEqual({ ok: true });
+    await flushAfter();
+    expect(sent).toHaveLength(0);
   });
 
   it("creates a session only after verification and blocks deactivated admins", async () => {

@@ -13,7 +13,7 @@ Priority order for every decision: **Security → Correctness → Maintainabilit
 | Email | Resend | HTML templates built in `src/lib/email/templates` |
 | Files | Cloudinary, `type: "authenticated"` (private) assets | Signed direct uploads, short-lived signed download URLs |
 | Bot protection | Cloudflare Turnstile | Server-side `siteverify` on every protected action |
-| Rate limiting | Upstash Redis (`@upstash/ratelimit`) | In-memory fallback **only** in development |
+| Rate limiting | Postgres fixed-window counters (`rate_limits` table) | No extra service; fails closed |
 | Phone numbers | `libphonenumber-js` | Stored in E.164 |
 | Tests | Vitest | |
 
@@ -23,12 +23,21 @@ Two completely separate identity domains with separate tables, cookies and sessi
 
 | | Admin | Applicant |
 | --- | --- | --- |
-| Identity | Pre-authorised row in `admins` (seeded from `ADMIN_EMAILS` / created by a super admin) | Row in `applicants`, created on first submission |
-| Login | `/admin` → email → 6-digit code **or** magic link | `/portal/login` → email → 6-digit code **or** magic link |
+| Identity | Row in `admins`: the first is seeded from `SEED_ADMIN_*`, the rest are invited by a super admin | Row in `applicants`, created on first submission |
+| Login | `/admin` → email + password (scrypt). Invites and resets use emailed single-use links. | `/portal/login` → email → 6-digit code **or** magic link |
 | Cookie | `lc_admin_session` | `lc_applicant_session` |
 | Lifetime | 12 h absolute, 2 h idle | 2 h absolute, 30 min idle |
 
-**Verification codes** (`*_verification_codes`):
+**Admin passwords:**
+
+- Hashed with scrypt (N=2^15, r=8, p=1, random 16-byte salt). Parameters are stored in the hash string so they can be raised later.
+- The policy is 12–128 characters, with obvious and repetitive passwords rejected (following NIST 800-63B).
+- Login is rate-limited per email and per IP and protected by Turnstile. After 5 failures the account locks for 15 minutes.
+- Unknown emails go through a dummy hash check, so response timing doesn't reveal which accounts exist.
+- `admin_tokens` holds INVITE tokens (7 days) and PASSWORD_RESET tokens (30 minutes). They are 256-bit, stored as SHA-256, and single-use (an atomic conditional update).
+- Redeeming a token sets the password, revokes every session, and signs the admin in. A reset also emails a "password changed" notice.
+
+**Applicant verification codes** (`applicant_verification_codes`):
 
 - 6-digit numeric code + separate 256-bit link token, generated with `crypto.randomInt` / `randomBytes`.
 - Stored only as `HMAC-SHA256(SESSION_SECRET, purpose|email|value)`. Never stored or logged in plaintext.

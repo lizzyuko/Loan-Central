@@ -4,7 +4,7 @@ International loan pre-qualification and application platform. Applicants apply 
 
 > Loan Central provides a pre-qualification review. Submitting an application does not guarantee approval or a loan offer.
 
-- **Stack:** Next.js 16 (App Router), React 19, TypeScript (strict), CSS Modules, React Hook Form + Zod, Drizzle ORM on Neon Postgres, Resend, Cloudinary, Cloudflare Turnstile, Upstash Redis. Deployed on Vercel.
+- **Stack:** Next.js 16 (App Router), React 19, TypeScript (strict), CSS Modules, React Hook Form + Zod, Drizzle ORM on Neon Postgres, Resend, Cloudinary, Cloudflare Turnstile. Deployed on Vercel.
 - **Architecture:** see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the auth model, data flow, schema and security design.
 
 ---
@@ -32,9 +32,9 @@ npm run dev                     # http://localhost:3000
 | `ENCRYPTION_KEY` | `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | `1x00000000000000000000AA` (Cloudflare test key, always passes) |
 | `TURNSTILE_SECRET_KEY` | `1x0000000000000000000000000000000AA` |
-| `DEV_EMAIL_CONSOLE` | `true`, which prints emails (including sign-in codes) to the terminal while Resend isn't configured. **Development only.** It is ignored in production. |
+| `DEV_EMAIL_CONSOLE` | `true`, which prints emails (invite and reset links, portal sign-in codes) to the terminal while Resend isn't configured. **Development only.** It is ignored in production. |
 
-Then sign in at `/admin` as `super.admin@loancentral.test` (super admin) or `reviewer@loancentral.test` (admin). The code appears in the terminal.
+Then sign in at `/admin` as `super.admin@loancentral.test` (super admin) or `reviewer@loancentral.test` (admin), password `loan-central-dev-only`. These demo accounts exist only with `--dev` and are refused in production.
 
 Document uploads need Cloudinary credentials, even locally.
 
@@ -48,7 +48,7 @@ Document uploads need Cloudinary credentials, even locally.
 | `npm test` | Unit tests (integration tests run when `TEST_DATABASE_URL` is set) |
 | `npm run db:generate` | Generate a migration after editing `src/db/schema` |
 | `npm run db:migrate` | Apply migrations |
-| `npm run db:seed` | Reference data only: document types, loan products, advisory rules, and super admins from `ADMIN_EMAILS`. Safe in production. |
+| `npm run db:seed` | Reference data only: document types, loan products, advisory rules, and the first super admin from `SEED_ADMIN_*`. Safe in production. |
 | `npm run db:seed -- --dev` | Also adds demo admins and sample applications. Refused when `NODE_ENV=production`. |
 | `npm run db:studio` | Browse the database |
 
@@ -82,13 +82,11 @@ Every email is recorded in the `communications` table with its delivery status. 
 
 1. In the Cloudflare dashboard, go to **Turnstile** and **Add widget**. Add your production domain (and `localhost` if you want real checks locally).
 2. Set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
-3. Turnstile protects application submission and both sign-in code requests. Tokens are always verified server-side, including the expected action.
+3. Turnstile protects application submission, admin sign-in, password-reset requests and portal sign-in. Tokens are always verified server-side, including the expected action.
 
-### Upstash Redis (rate limiting)
+### Rate limiting
 
-1. Create a Redis database at [upstash.com](https://upstash.com). Choose the region closest to your Vercel deployment.
-2. Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
-3. **Required in production.** Without it, the limiter **fails closed** (rate-limited actions are refused). In development, an in-memory limiter is used.
+There's nothing to set up. Limits are counted in the `rate_limits` table in Postgres, and the daily cron clears old counters. If the database can't be reached, rate-limited actions are refused (fail closed).
 
 ---
 
@@ -98,7 +96,7 @@ Every email is recorded in the `communications` table with its delivery status. 
 2. Add every variable from `.env.example` under **Project → Settings → Environment Variables**, with real production values:
    - `NEXT_PUBLIC_APP_URL`: your production URL, with no trailing slash
    - `CRON_SECRET`: a random string. Vercel Cron sends it to `/api/cron/cleanup`.
-   - `ADMIN_EMAILS`: comma-separated addresses that become super admins on their first sign-in
+   - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` (12+ characters) and optionally `SEED_ADMIN_NAME`: your first super admin account
    - leave `DEV_EMAIL_CONSOLE` unset
 3. Deploy. Vercel runs the `vercel-build` script, which applies pending migrations and seeds reference data (idempotent) before `next build`, so a fresh Neon database is set up automatically. `DATABASE_URL` must be set for **Preview** and **Production**, otherwise the build fails. Point Preview at a separate Neon branch if you don't want previews migrating the production database.
 4. After deploying: `vercel.json` schedules the daily cleanup job (03:00 UTC), which:
@@ -106,7 +104,9 @@ Every email is recorded in the `communications` table with its delivery status. 
    - removes expired codes and sessions
    - purges encrypted account details once their retention period ends
 
-**Bootstrapping the first administrator:** add your email to `ADMIN_EMAILS`, visit `/admin`, and request a code. The account is created as a super admin on first sign-in. Add further admins from **Settings → Administrators**.
+**First administrator:** the deploy's seed step creates a super admin from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`. Sign in at `/admin` with those credentials. Later deploys never overwrite that password, so you can change it under **Your account**, and you can delete `SEED_ADMIN_PASSWORD` from Vercel afterwards.
+
+**More administrators:** go to **Settings → Administrators → Invite**. The invitee gets an email link (valid for 7 days) to set their own password. Anyone can use **Forgot your password?** on the sign-in page; reset links expire after 30 minutes and sign out every other session.
 
 ---
 
@@ -124,7 +124,7 @@ Every email is recorded in the `communications` table with its delivery status. 
 4. Applicants track progress at `/portal`, signing in with a one-time code or magic link. There they can answer information requests and, once invited, submit account details.
 
 **Administrators**
-1. They sign in at `/admin` with a one-time code or magic link. Only pre-authorised, active admins receive codes.
+1. They sign in at `/admin` with email and password. Accounts are created only by invitation from a super admin.
 2. The dashboard and application list support search, filters, sorting and pagination.
 3. On the application detail page, admins can:
    - review everything and open documents securely
@@ -139,7 +139,9 @@ Every email is recorded in the `communications` table with its delivery status. 
 
 ## Security summary
 
-- Passwordless auth with hashed, single-use, 10-minute codes, limited to 5 attempts. Requests are rate-limited and protected by Turnstile, and responses are generic so they don't reveal which emails exist.
+- **Admins:** passwords are hashed with scrypt. The account locks for 15 minutes after 5 failures. Invite and reset tokens are single-use, hashed and short-lived, and a reset revokes all sessions.
+- **Applicants:** passwordless sign-in with hashed, single-use, 10-minute codes, limited to 5 attempts.
+- Sign-in is rate-limited and protected by Turnstile. Error messages are generic, so they don't reveal which emails exist.
 - Sessions are stored in the database with HTTP-only `SameSite=Lax` cookies (`Secure` in production). They have absolute and idle expiry, and logout revokes them.
 - Every page, action and route handler re-checks authorization through the data access layer. `proxy.ts` only does an optimistic redirect.
 - Applicants only ever query records scoped to their own `applicant_id`. Knowing an ID grants nothing.

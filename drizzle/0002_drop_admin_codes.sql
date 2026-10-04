@@ -1,0 +1,1 @@
+DROP TABLE "admin_verification_codes" CASCADE;

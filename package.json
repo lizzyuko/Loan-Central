@@ -20,8 +20,6 @@
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
     "@phosphor-icons/react": "^2.1.10",
-    "@upstash/ratelimit": "^2.2.0",
-    "@upstash/redis": "^1.39.0",
     "cloudinary": "^2.11.0",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.3",

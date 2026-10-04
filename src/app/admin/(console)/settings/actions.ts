@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import type { z } from "zod";
 import { AuthError, requireAdmin } from "@/lib/auth/admin";
 import type { Permission } from "@/lib/auth/permissions";
-import { createAdmin, saveDocumentType, saveProduct, SettingsError, updateAdmin } from "@/lib/admin/settings";
+import { createAdmin, resendInvite, saveDocumentType, saveProduct, SettingsError, updateAdmin } from "@/lib/admin/settings";
 import { logger } from "@/lib/security/logger";
-import { adminCreateSchema, adminUpdateSchema, documentTypeSchema, productSchema } from "@/lib/validation/settings";
+import { adminCreateSchema, adminIdSchema, adminUpdateSchema, documentTypeSchema, productSchema } from "@/lib/validation/settings";
 
 export type SettingsResult = { ok: true; message: string } | { ok: false; error: string };
 
@@ -33,8 +33,15 @@ async function run<S extends z.ZodType>(
 
 export async function createAdminAction(raw: unknown) {
   return run("admins.manage", adminCreateSchema, raw, "/admin/settings/admins", async (a, i) => {
-    await createAdmin(a, i);
-    return "Administrator added. They can now sign in with their email.";
+    const status = await createAdmin(a, i);
+    return status === "SENT" ? `Invitation sent to ${i.email}.` : "Administrator added, but the invitation email could not be sent. Use \"Resend invite\" once email is configured.";
+  });
+}
+
+export async function resendInviteAction(raw: unknown) {
+  return run("admins.manage", adminIdSchema, raw, "/admin/settings/admins", async (a, i) => {
+    const status = await resendInvite(a, i.adminId);
+    return status === "SENT" ? "Invitation re-sent." : "The invitation email could not be sent. Check the email configuration.";
   });
 }
 

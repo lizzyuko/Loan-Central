@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { ClockCounterClockwise, Files, FileText, Package, SignOut, SquaresFour, UsersThree } from "@phosphor-icons/react/ssr";
 import { Logo } from "@/components/ui/Logo";
@@ -51,10 +52,10 @@ export function AdminShell({ admin, children }: { admin: CurrentAdmin; children:
           )}
         </nav>
         <div className={styles.user}>
-          <div className={styles.userInfo}>
+          <Link href="/admin/account" className={styles.userInfo} title="Your account">
             <p className={styles.userName}>{admin.name}</p>
             <p className={styles.userRole}>{ROLE_LABELS[admin.role]}</p>
-          </div>
+          </Link>
           <form action={logoutAdmin}>
             <button type="submit" className={styles.logout} aria-label="Sign out">
               <SignOut size={18} />

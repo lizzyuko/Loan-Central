@@ -1,22 +1,28 @@
 import "server-only";
-import { Ratelimit, type Duration } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
-import { isProduction, upstashConfig } from "@/lib/env";
+import { lt, sql } from "drizzle-orm";
+import { getDb } from "@/db";
+import { rateLimits } from "@/db/schema";
 import { logger } from "./logger";
 
 /**
- * Named rate-limit policies. Keys passed to `rateLimit()` should already be
- * pseudonymous (hashed email / hashed IP).
+ * Fixed-window rate limiting stored in Postgres (one upsert per check), so no
+ * extra service is needed. Keys passed in should already be pseudonymous
+ * (hashed email / hashed IP).
  */
 export const RATE_LIMITS = {
-  authRequestByEmail: { limit: 5, window: "15 m" },
-  authRequestByIp: { limit: 20, window: "15 m" },
-  authVerifyByIp: { limit: 15, window: "15 m" },
-  applicationSubmitByIp: { limit: 5, window: "1 h" },
-  uploadByIp: { limit: 40, window: "1 h" },
-  portalActionByApplicant: { limit: 30, window: "10 m" },
-  adminSensitiveByAdmin: { limit: 30, window: "10 m" },
-} as const satisfies Record<string, { limit: number; window: Duration }>;
+  adminLoginByEmail: { limit: 10, windowSeconds: 15 * 60 },
+  adminLoginByIp: { limit: 30, windowSeconds: 15 * 60 },
+  passwordResetByEmail: { limit: 3, windowSeconds: 60 * 60 },
+  passwordResetByIp: { limit: 10, windowSeconds: 60 * 60 },
+  tokenRedeemByIp: { limit: 20, windowSeconds: 15 * 60 },
+  authRequestByEmail: { limit: 5, windowSeconds: 15 * 60 },
+  authRequestByIp: { limit: 20, windowSeconds: 15 * 60 },
+  authVerifyByIp: { limit: 15, windowSeconds: 15 * 60 },
+  applicationSubmitByIp: { limit: 5, windowSeconds: 60 * 60 },
+  uploadByIp: { limit: 40, windowSeconds: 60 * 60 },
+  portalActionByApplicant: { limit: 30, windowSeconds: 10 * 60 },
+  adminSensitiveByAdmin: { limit: 30, windowSeconds: 10 * 60 },
+} as const satisfies Record<string, { limit: number; windowSeconds: number }>;
 
 export type RateLimitPolicy = keyof typeof RATE_LIMITS;
 
@@ -25,96 +31,43 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
-// --- Upstash (production) ---------------------------------------------------
-
-const limiters = new Map<RateLimitPolicy, Ratelimit>();
-let redis: Redis | null | undefined;
-
-function getRedis(): Redis | null {
-  if (redis === undefined) {
-    const cfg = upstashConfig();
-    redis = cfg ? new Redis(cfg) : null;
-  }
-  return redis;
-}
-
-function getLimiter(policy: RateLimitPolicy): Ratelimit | null {
-  const client = getRedis();
-  if (!client) return null;
-  let limiter = limiters.get(policy);
-  if (!limiter) {
-    const { limit, window } = RATE_LIMITS[policy];
-    limiter = new Ratelimit({
-      redis: client,
-      limiter: Ratelimit.slidingWindow(limit, window),
-      prefix: `lc:rl:${policy}`,
-      analytics: false,
-    });
-    limiters.set(policy, limiter);
-  }
-  return limiter;
-}
-
-// --- In-memory (development only) -------------------------------------------
-
-const memory = new Map<string, number[]>();
-
-function windowMs(window: Duration): number {
-  const [n, unit] = window.split(" ") as [string, string];
-  const mult: Record<string, number> = { ms: 1, s: 1e3, m: 6e4, h: 36e5, d: 864e5 };
-  return Number(n) * (mult[unit] ?? 6e4);
-}
-
-function memoryLimit(policy: RateLimitPolicy, key: string): RateLimitResult {
-  const { limit, window } = RATE_LIMITS[policy];
-  const span = windowMs(window);
-  const now = Date.now();
-  const k = `${policy}:${key}`;
-  const hits = (memory.get(k) ?? []).filter((t) => now - t < span);
-  if (hits.length >= limit) {
-    const oldest = hits[0] ?? now;
-    memory.set(k, hits);
-    return { success: false, retryAfterSeconds: Math.ceil((oldest + span - now) / 1000) };
-  }
-  hits.push(now);
-  memory.set(k, hits);
-  return { success: true, retryAfterSeconds: 0 };
+/** Start of the fixed window containing `nowMs`. */
+export function windowStart(nowMs: number, windowSeconds: number): number {
+  const span = windowSeconds * 1000;
+  return Math.floor(nowMs / span) * span;
 }
 
 export async function rateLimit(policy: RateLimitPolicy, key: string): Promise<RateLimitResult> {
-  const limiter = getLimiter(policy);
-  if (!limiter) {
-    if (isProduction) {
-      // Fail closed: running without a shared limiter in production is unsafe.
-      logger.error("Rate limiter not configured in production", { policy });
-      return { success: false, retryAfterSeconds: 60 };
-    }
-    return memoryLimit(policy, key);
-  }
+  const { limit, windowSeconds } = RATE_LIMITS[policy];
+  const now = Date.now();
+  const start = windowStart(now, windowSeconds);
   try {
-    const res = await limiter.limit(key);
-    return {
-      success: res.success,
-      retryAfterSeconds: res.success ? 0 : Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)),
-    };
+    const [row] = await getDb()
+      .insert(rateLimits)
+      .values({ key: `${policy}:${key}`, windowStart: new Date(start), count: 1 })
+      .onConflictDoUpdate({ target: [rateLimits.key, rateLimits.windowStart], set: { count: sql`${rateLimits.count} + 1` } })
+      .returning({ count: rateLimits.count });
+    const count = row?.count ?? 1;
+    if (count <= limit) return { success: true, retryAfterSeconds: 0 };
+    return { success: false, retryAfterSeconds: Math.max(1, Math.ceil((start + windowSeconds * 1000 - now) / 1000)) };
   } catch (err) {
+    // Fail closed: if we can't count, we don't allow the abuse-prone action.
     logger.error("Rate limiter error", { policy, err });
     return { success: false, retryAfterSeconds: 30 };
   }
 }
 
 /** Check several limits; fails if any fails. All are counted. */
-export async function rateLimitAll(
-  checks: Array<[RateLimitPolicy, string | null | undefined]>,
-): Promise<RateLimitResult> {
+export async function rateLimitAll(checks: Array<[RateLimitPolicy, string | null | undefined]>): Promise<RateLimitResult> {
   const results = await Promise.all(
-    checks
-      .filter((c): c is [RateLimitPolicy, string] => Boolean(c[1]))
-      .map(([policy, key]) => rateLimit(policy, key)),
+    checks.filter((c): c is [RateLimitPolicy, string] => Boolean(c[1])).map(([policy, key]) => rateLimit(policy, key)),
   );
   const failed = results.filter((r) => !r.success);
   if (failed.length === 0) return { success: true, retryAfterSeconds: 0 };
   return { success: false, retryAfterSeconds: Math.max(...failed.map((r) => r.retryAfterSeconds)) };
 }
 
-export const __test = { memoryLimit, memory };
+/** Housekeeping: drop counters older than the longest window. */
+export async function purgeOldRateLimits(): Promise<void> {
+  await getDb().delete(rateLimits).where(lt(rateLimits.windowStart, new Date(Date.now() - 2 * 60 * 60 * 1000)));
+}

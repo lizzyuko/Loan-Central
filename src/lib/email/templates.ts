@@ -20,14 +20,14 @@ function greet(firstName?: string): string {
 
 // --- Authentication -----------------------------------------------------------
 
-export function verificationEmail(opts: { code: string; link: string; minutes: number; audience: "admin" | "applicant" }): EmailContent {
+/** Applicant portal sign-in code + magic link. */
+export function verificationEmail(opts: { code: string; link: string; minutes: number }): EmailContent {
   const subject = `Your ${siteConfig.name} verification code`;
-  const where = opts.audience === "admin" ? "the admin dashboard" : "your applicant portal";
   const html = renderLayout({
     preheader: `Your code is ${opts.code}. It expires in ${opts.minutes} minutes.`,
     heading: "Your verification code",
     body: [
-      p(`Use this code to sign in to ${escapeHtml(where)}. It expires in ${opts.minutes} minutes and can only be used once.`),
+      p(`Use this code to sign in to your applicant portal. It expires in ${opts.minutes} minutes and can only be used once.`),
       codeBlock(opts.code),
       p("Or sign in with this one-time link:"),
       button("Sign in securely", opts.link),
@@ -35,6 +35,59 @@ export function verificationEmail(opts: { code: string; link: string; minutes: n
     ].join(""),
   });
   const text = `Your ${siteConfig.name} verification code is ${opts.code}. It expires in ${opts.minutes} minutes.\n\nOr sign in with this one-time link: ${opts.link}\n\nIf you didn't request this, ignore this email.`;
+  return { subject, html, text };
+}
+
+// --- Administrator accounts ---------------------------------------------------
+
+export function adminInviteEmail(opts: { name: string; inviterName: string; link: string; days: number }): EmailContent {
+  const subject = `You've been invited to the ${siteConfig.name} admin dashboard`;
+  const html = renderLayout({
+    preheader: `${opts.inviterName} invited you to review applications on ${siteConfig.name}.`,
+    heading: "You've been invited",
+    body: [
+      p(escapeHtml(greet(opts.name))),
+      p(`${escapeHtml(opts.inviterName)} has invited you to join the ${escapeHtml(siteConfig.name)} admin dashboard. Set your password to activate your account.`),
+      button("Accept invitation", opts.link),
+      p(`This link expires in ${opts.days} days and can only be used once. If you weren't expecting this invitation, you can ignore this email.`),
+    ].join(""),
+    footnote: `${siteConfig.name} will never ask for your password by email or phone.`,
+  });
+  const text = `${greet(opts.name)}\n\n${opts.inviterName} has invited you to the ${siteConfig.name} admin dashboard. Set your password here (expires in ${opts.days} days):\n${opts.link}\n\nIf you weren't expecting this, ignore this email.`;
+  return { subject, html, text };
+}
+
+export function passwordResetEmail(opts: { name: string; link: string; minutes: number }): EmailContent {
+  const subject = `Reset your ${siteConfig.name} password`;
+  const html = renderLayout({
+    preheader: "Use this link to choose a new password.",
+    heading: "Reset your password",
+    body: [
+      p(escapeHtml(greet(opts.name))),
+      p("We received a request to reset the password for your admin account."),
+      button("Choose a new password", opts.link),
+      p(`This link expires in ${opts.minutes} minutes and can only be used once. If you didn't ask to reset your password, you can ignore this email. Your password won't change.`),
+    ].join(""),
+    footnote: `${siteConfig.name} will never ask for your password by email or phone.`,
+  });
+  const text = `${greet(opts.name)}\n\nReset your ${siteConfig.name} admin password (link expires in ${opts.minutes} minutes):\n${opts.link}\n\nIf you didn't request this, ignore this email.`;
+  return { subject, html, text };
+}
+
+export function passwordChangedEmail(opts: { name: string; resetUrl: string }): EmailContent {
+  const subject = `Your ${siteConfig.name} password was changed`;
+  const html = renderLayout({
+    preheader: "Your admin password was just changed.",
+    heading: "Your password was changed",
+    body: [
+      p(escapeHtml(greet(opts.name))),
+      p("The password for your admin account was just changed, and you were signed out of other devices."),
+      p(`If this wasn't you, reset your password immediately and contact your super administrator.`),
+      button("Reset password", opts.resetUrl),
+    ].join(""),
+    footnote: `${siteConfig.name} will never ask for your password by email or phone.`,
+  });
+  const text = `${greet(opts.name)}\n\nThe password for your ${siteConfig.name} admin account was just changed. If this wasn't you, reset it now: ${opts.resetUrl}`;
   return { subject, html, text };
 }
 

@@ -13,7 +13,7 @@ type ActionResult = { ok: true } | { ok: false; error: string };
 type VerifyResult = { ok: true; redirectTo: string } | { ok: false; error: string };
 
 interface Props {
-  audience: "admin" | "applicant";
+  audience: "applicant";
   turnstileSiteKey: string;
   requestCode: (input: { email: string; turnstileToken: string | null }) => Promise<ActionResult>;
   verifyCode: (input: { email: string; code: string }) => Promise<VerifyResult>;
@@ -22,7 +22,7 @@ interface Props {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function PasswordlessLogin({ audience, turnstileSiteKey, requestCode, verifyCode, notice }: Props) {
+export function PasswordlessLogin({ turnstileSiteKey, requestCode, verifyCode, notice }: Props) {
   const router = useRouter();
   const [stage, setStage] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -82,7 +82,7 @@ export function PasswordlessLogin({ audience, turnstileSiteKey, requestCode, ver
     return (
       <form className={styles.form} onSubmit={submitCode} noValidate>
         <Alert tone="info" title="Check your email">
-          If <strong>{email}</strong> {audience === "admin" ? "is an authorised administrator" : "matches an application"}, we&apos;ve sent a
+          If <strong>{email}</strong> matches an application, we&apos;ve sent a
           6-digit code and a sign-in link. The code expires in 10 minutes.
         </Alert>
         {error && <Alert tone="danger">{error}</Alert>}
@@ -127,7 +127,7 @@ export function PasswordlessLogin({ audience, turnstileSiteKey, requestCode, ver
       <Field
         label="Email address"
         error={fieldError ?? undefined}
-        hint={audience === "applicant" ? "Use the email address from your application." : undefined}
+        hint="Use the email address from your application."
       >
         {({ id, describedBy, invalid }) => (
           <Input
@@ -143,7 +143,7 @@ export function PasswordlessLogin({ audience, turnstileSiteKey, requestCode, ver
           />
         )}
       </Field>
-      <Turnstile ref={turnstileRef} siteKey={turnstileSiteKey} action={audience === "admin" ? "admin_login" : "portal_login"} onToken={setToken} />
+      <Turnstile ref={turnstileRef} siteKey={turnstileSiteKey} action="portal_login" onToken={setToken} />
       <Button type="submit" size="lg" fullWidth loading={pending}>
         Send sign-in code
       </Button>

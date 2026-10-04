@@ -4,15 +4,15 @@ import { redirect } from "next/navigation";
 import { handleLogout, handleRequestCode, handleVerifyCode, handleVerifyLink } from "@/lib/auth/login-actions";
 
 export async function requestApplicantCode(input: unknown) {
-  return handleRequestCode("applicant", input);
+  return handleRequestCode(input);
 }
 
 export async function verifyApplicantCode(input: unknown) {
-  return handleVerifyCode("applicant", input);
+  return handleVerifyCode(input);
 }
 
 export async function verifyApplicantLink(input: unknown) {
-  return handleVerifyLink("applicant", input);
+  return handleVerifyLink(input);
 }
 
 export async function logoutApplicant() {

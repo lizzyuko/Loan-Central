@@ -22,6 +22,8 @@ export const adminCreateSchema = z.object({
   role: z.enum(ADMIN_ROLES),
 });
 
+export const adminIdSchema = z.object({ adminId: z.uuid() });
+
 export const adminUpdateSchema = z.object({
   adminId: z.uuid(),
   role: z.enum(ADMIN_ROLES),

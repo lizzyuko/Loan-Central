@@ -21,7 +21,6 @@ const raw = {
   SESSION_SECRET: process.env.SESSION_SECRET,
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
   CRON_SECRET: process.env.CRON_SECRET,
-  ADMIN_EMAILS: process.env.ADMIN_EMAILS,
   RESEND_API_KEY: process.env.RESEND_API_KEY,
   RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
   RESEND_REPLY_TO: process.env.RESEND_REPLY_TO,
@@ -30,8 +29,6 @@ const raw = {
   CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
   TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
-  UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-  UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
   DEV_EMAIL_CONSOLE: process.env.DEV_EMAIL_CONSOLE,
 };
 
@@ -42,7 +39,6 @@ const schema = z.object({
   SESSION_SECRET: optional,
   ENCRYPTION_KEY: optional,
   CRON_SECRET: optional,
-  ADMIN_EMAILS: optional,
   RESEND_API_KEY: optional,
   RESEND_FROM_EMAIL: optional,
   RESEND_REPLY_TO: optional,
@@ -51,8 +47,6 @@ const schema = z.object({
   CLOUDINARY_API_SECRET: optional,
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: optional,
   TURNSTILE_SECRET_KEY: optional,
-  UPSTASH_REDIS_REST_URL: optional,
-  UPSTASH_REDIS_REST_TOKEN: optional,
   DEV_EMAIL_CONSOLE: optional,
 });
 
@@ -107,12 +101,6 @@ export function cronSecret(): string | undefined {
   return env.CRON_SECRET;
 }
 
-export function bootstrapAdminEmails(): string[] {
-  return (env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 export function resendConfig() {
   const cfg = need("Email (Resend)", ["RESEND_API_KEY", "RESEND_FROM_EMAIL"]);
@@ -136,7 +124,3 @@ export function turnstileSecret(): string {
   return need("Turnstile", ["TURNSTILE_SECRET_KEY"]).TURNSTILE_SECRET_KEY;
 }
 
-export function upstashConfig() {
-  if (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN) return null;
-  return { url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN };
-}

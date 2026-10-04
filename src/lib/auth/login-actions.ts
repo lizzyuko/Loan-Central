@@ -6,7 +6,7 @@ import { logger } from "@/lib/security/logger";
 import { requestLoginCode, verifyLoginCode, verifyLoginLink, type RequestCodeResult, type VerifyLoginResult } from "./login";
 import { destroySession, type SessionKind } from "./session";
 
-/** Shared implementations behind the admin and portal sign-in server actions. */
+/** Shared implementations behind the applicant portal sign-in server actions. */
 
 const requestSchema = z.object({
   email: emailSchema,
@@ -18,41 +18,40 @@ const linkSchema = z.object({ token: z.string().min(32).max(128) });
 
 const UNEXPECTED = "Something went wrong. Please try again.";
 
-export async function handleRequestCode(kind: SessionKind, raw: unknown): Promise<RequestCodeResult> {
+export async function handleRequestCode(raw: unknown): Promise<RequestCodeResult> {
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Enter a valid email address." };
   try {
     return await requestLoginCode({
-      kind,
       email: parsed.data.email,
       turnstileToken: parsed.data.turnstileToken,
       ctx: await getRequestContext(),
-      redirectPath: kind === "applicant" ? safeRedirectPath(parsed.data.redirectPath, "/portal") : null,
+      redirectPath: safeRedirectPath(parsed.data.redirectPath, "/portal"),
     });
   } catch (err) {
-    logger.error("Sign-in code request failed", { kind, err });
+    logger.error("Sign-in code request failed", { err });
     return { ok: false, error: UNEXPECTED };
   }
 }
 
-export async function handleVerifyCode(kind: SessionKind, raw: unknown): Promise<VerifyLoginResult> {
+export async function handleVerifyCode(raw: unknown): Promise<VerifyLoginResult> {
   const parsed = verifySchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "That code isn't valid." };
   try {
-    return await verifyLoginCode({ kind, ...parsed.data, ctx: await getRequestContext() });
+    return await verifyLoginCode({ ...parsed.data, ctx: await getRequestContext() });
   } catch (err) {
-    logger.error("Code verification failed", { kind, err });
+    logger.error("Code verification failed", { err });
     return { ok: false, error: UNEXPECTED };
   }
 }
 
-export async function handleVerifyLink(kind: SessionKind, raw: unknown): Promise<VerifyLoginResult> {
+export async function handleVerifyLink(raw: unknown): Promise<VerifyLoginResult> {
   const parsed = linkSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "This sign-in link is invalid or has already been used." };
   try {
-    return await verifyLoginLink({ kind, token: parsed.data.token, ctx: await getRequestContext() });
+    return await verifyLoginLink({ token: parsed.data.token, ctx: await getRequestContext() });
   } catch (err) {
-    logger.error("Link verification failed", { kind, err });
+    logger.error("Link verification failed", { err });
     return { ok: false, error: UNEXPECTED };
   }
 }

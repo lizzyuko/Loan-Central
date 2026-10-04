@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { decrypt, encrypt, generateNumericCode, hmac, safeEqual } from "@/lib/security/crypto";
 import { __test as loggerTest } from "@/lib/security/logger";
-import { __test as rl } from "@/lib/security/rate-limit";
+import { windowStart } from "@/lib/security/rate-limit";
+import { hashPassword, newPasswordSchema, verifyPassword } from "@/lib/auth/password";
 import { safeRedirectPath } from "@/lib/security/request";
 import { hashCode } from "@/lib/auth/codes";
 import { verifyTurnstile } from "@/lib/turnstile/verify";
@@ -31,11 +32,10 @@ describe("verification codes", () => {
   it("are 6 digits and hashed with a server key, bound to user and kind", () => {
     const code = generateNumericCode();
     expect(code).toMatch(/^\d{6}$/);
-    const h = hashCode("admin", "user-1", code);
+    const h = hashCode("applicant", "user-1", code);
     expect(h).not.toContain(code);
-    expect(hashCode("applicant", "user-1", code)).not.toBe(h);
-    expect(hashCode("admin", "user-2", code)).not.toBe(h);
-    expect(safeEqual(h, hashCode("admin", "user-1", code))).toBe(true);
+    expect(hashCode("applicant", "user-2", code)).not.toBe(h);
+    expect(safeEqual(h, hashCode("applicant", "user-1", code))).toBe(true);
   });
 
   it("hmac differs by purpose", () => {
@@ -53,13 +53,32 @@ describe("logger redaction", () => {
   });
 });
 
-describe("rate limiting (development limiter)", () => {
-  it("blocks after the policy limit", () => {
-    rl.memory.clear();
-    for (let i = 0; i < 5; i++) expect(rl.memoryLimit("authRequestByEmail", "k").success).toBe(true);
-    const blocked = rl.memoryLimit("authRequestByEmail", "k");
-    expect(blocked.success).toBe(false);
-    expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
+describe("rate limiting windows", () => {
+  it("buckets timestamps into fixed windows", () => {
+    const w = 15 * 60;
+    const t = Date.UTC(2026, 9, 4, 10, 7, 30);
+    expect(windowStart(t, w)).toBe(Date.UTC(2026, 9, 4, 10, 0, 0));
+    expect(windowStart(t + 8 * 60_000, w)).toBe(Date.UTC(2026, 9, 4, 10, 15, 0));
+  });
+});
+
+describe("passwords", () => {
+  it("hashes with a random salt and verifies", async () => {
+    const a = await hashPassword("correct horse battery staple");
+    const b = await hashPassword("correct horse battery staple");
+    expect(a).not.toBe(b);
+    expect(a.startsWith("scrypt$")).toBe(true);
+    expect(a).not.toContain("correct horse");
+    expect(await verifyPassword("correct horse battery staple", a)).toBe(true);
+    expect(await verifyPassword("Correct horse battery staple", a)).toBe(false);
+    expect(await verifyPassword("x", "not-a-hash")).toBe(false);
+  });
+
+  it("enforces the password policy", () => {
+    expect(newPasswordSchema.safeParse("short").success).toBe(false);
+    expect(newPasswordSchema.safeParse("aaaaaaaaaaaaaaaa").success).toBe(false);
+    expect(newPasswordSchema.safeParse("password1234").success).toBe(false);
+    expect(newPasswordSchema.safeParse("river-lantern-copper-71").success).toBe(true);
   });
 });
 
@@ -155,7 +174,7 @@ describe("email templates", () => {
   });
 
   it("use the required subjects", () => {
-    expect(verificationEmail({ code: "123456", link: "https://x", minutes: 10, audience: "admin" }).subject).toBe("Your Loan Central verification code");
+    expect(verificationEmail({ code: "123456", link: "https://x", minutes: 10 }).subject).toBe("Your Loan Central verification code");
     expect(accountDetailsRequestEmail({ firstName: "A", reference: "LC-2026-111111", portalUrl: "https://x" }).subject).toBe("Next step for your Loan Central application");
   });
 

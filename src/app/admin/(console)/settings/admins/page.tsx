@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AddAdminForm, AdminRowForm } from "@/components/admin/SettingsForms";
+import { AddAdminForm, AdminRowForm, ResendInviteButton } from "@/components/admin/SettingsForms";
 import { Badge } from "@/components/ui/Feedback";
 import { listAdmins } from "@/lib/admin/settings";
 import { requireAdminPage } from "@/lib/auth/admin";
@@ -20,13 +20,13 @@ export default async function AdminsPage() {
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Administrators</h1>
-          <p className={styles.pageSubtitle}>Only listed, active administrators can request a sign-in code.</p>
+          <p className={styles.pageSubtitle}>Invite colleagues by email. They choose their own password from the invitation link.</p>
         </div>
       </div>
 
       <section className={styles.panel}>
         <div className={styles.panelHead}>
-          <h2 className={styles.panelTitle}>Add an administrator</h2>
+          <h2 className={styles.panelTitle}>Invite an administrator</h2>
         </div>
         <AddAdminForm />
       </section>
@@ -48,12 +48,14 @@ export default async function AdminsPage() {
                 <tr key={a.id}>
                   <td>
                     {a.name} {!a.isActive && <Badge tone="danger">Inactive</Badge>}
+                    {a.isActive && !a.activated && <Badge tone="warning">Invitation pending</Badge>}
                   </td>
                   <td>{a.email}</td>
                   <td>{ROLE_LABELS[a.role]}</td>
                   <td className={styles.muted}>{a.lastLoginAt ? dateTime.format(a.lastLoginAt) : "Never"}</td>
                   <td>
                     <AdminRowForm adminId={a.id} role={a.role} isActive={a.isActive} isSelf={a.id === me.id} />
+                    {a.isActive && !a.activated && <ResendInviteButton adminId={a.id} />}
                   </td>
                 </tr>
               ))}

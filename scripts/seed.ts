@@ -3,7 +3,10 @@
  *
  *   npm run db:seed            reference data only (safe in any environment):
  *                              document types, loan products, advisory
- *                              eligibility rules, and SUPER_ADMINs from ADMIN_EMAILS
+ *                              eligibility rules, and the first SUPER_ADMIN from
+ *                              SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD (optional
+ *                              SEED_ADMIN_NAME). An existing password is never
+ *                              overwritten.
  *   npm run db:seed -- --dev   ALSO creates development sample data
  *                              (two demo admins + example applications).
  *                              Refused when NODE_ENV=production.
@@ -18,12 +21,39 @@ import * as schema from "../src/db/schema";
 import { DEFAULT_DOCUMENT_TYPES } from "../src/config/documents";
 import { toMonthlyIncome } from "../src/lib/application/income";
 import { generateReference } from "../src/lib/application/reference";
+import { hashPassword, newPasswordSchema } from "../src/lib/auth/password";
 import type { ApplicationStatus, EmploymentStatus, IncomeFrequency } from "../src/db/schema/enums";
 
 config({ path: ".env.local" });
 config();
 
 const DEV = process.argv.includes("--dev");
+const DEV_PASSWORD = "loan-central-dev-only";
+
+type Db = ReturnType<typeof drizzle<typeof schema>>;
+
+/** Creates (or activates) the first super admin from SEED_ADMIN_* variables. */
+async function seedSuperAdmin(db: Db): Promise<string> {
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.SEED_ADMIN_PASSWORD ?? "";
+  if (!email) return "skipped (SEED_ADMIN_EMAIL not set)";
+  const policy = newPasswordSchema.safeParse(password);
+  if (!policy.success) {
+    // Warn instead of failing the deploy.
+    console.warn(`SEED_ADMIN_PASSWORD rejected: ${policy.error.issues[0]?.message}. Seed admin not created.`);
+    return "skipped (password does not meet policy)";
+  }
+  const name = process.env.SEED_ADMIN_NAME?.trim() || email.split("@")[0] || "Administrator";
+  const [existing] = await db.select({ id: schema.admins.id, passwordHash: schema.admins.passwordHash }).from(schema.admins).where(eq(schema.admins.email, email));
+  if (existing?.passwordHash) return `${email} (already set up, password unchanged)`;
+  const passwordHash = await hashPassword(password);
+  if (existing) {
+    await db.update(schema.admins).set({ passwordHash, passwordUpdatedAt: new Date(), isActive: true }).where(eq(schema.admins.id, existing.id));
+    return `${email} (password set)`;
+  }
+  await db.insert(schema.admins).values({ email, name, role: "SUPER_ADMIN", passwordHash, passwordUpdatedAt: new Date() });
+  return `${email} (created)`;
+}
 
 const PRODUCTS = [
   {
@@ -145,20 +175,19 @@ async function main() {
     const existingRules = await db.select({ id: schema.eligibilityRules.id }).from(schema.eligibilityRules).limit(1);
     if (existingRules.length === 0) await db.insert(schema.eligibilityRules).values(RULES);
 
-    const bootstrap = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-    for (const email of bootstrap) {
-      await db.insert(schema.admins).values({ email, name: email.split("@")[0] ?? "Administrator", role: "SUPER_ADMIN" }).onConflictDoNothing();
-    }
-    console.log(`Reference data ready (${PRODUCTS.length} products, ${DEFAULT_DOCUMENT_TYPES.length} document types, ${bootstrap.length} bootstrap admins).`);
+    const seedAdmin = await seedSuperAdmin(db);
+    console.log(`Reference data ready (${PRODUCTS.length} products, ${DEFAULT_DOCUMENT_TYPES.length} document types). Seed admin: ${seedAdmin}.`);
 
     if (!DEV) return;
 
     // Development sample data -------------------------------------------------
+    // Development-only credentials (this branch is refused in production).
+    const devHash = await hashPassword(DEV_PASSWORD);
     await db
       .insert(schema.admins)
       .values([
-        { email: "super.admin@loancentral.test", name: "Morgan Ellis", role: "SUPER_ADMIN" },
-        { email: "reviewer@loancentral.test", name: "Ife Adeyemi", role: "ADMIN" },
+        { email: "super.admin@loancentral.test", name: "Morgan Ellis", role: "SUPER_ADMIN", passwordHash: devHash, passwordUpdatedAt: new Date() },
+        { email: "reviewer@loancentral.test", name: "Ife Adeyemi", role: "ADMIN", passwordHash: devHash, passwordUpdatedAt: new Date() },
       ])
       .onConflictDoNothing();
 
@@ -214,7 +243,7 @@ async function main() {
       });
       created++;
     }
-    console.log(`Development data ready (${created} new sample applications, demo admins super.admin@loancentral.test / reviewer@loancentral.test).`);
+    console.log(`Development data ready (${created} new sample applications, demo admins super.admin@loancentral.test / reviewer@loancentral.test, password "${DEV_PASSWORD}").`);
   } finally {
     await client.end();
   }
