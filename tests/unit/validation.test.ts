@@ -19,6 +19,7 @@ export const validPersonal = {
   phoneNumber: "07911 123456",
   countryOfResidence: "GB",
   nationality: "",
+  nationalId: "AB 12 34 56 C",
 };
 
 export const validSubmission = {
@@ -70,6 +71,21 @@ describe("personal information", () => {
 
   it("rejects names containing markup", () => {
     expect(personalInfoSchema.safeParse({ ...validPersonal, firstName: "<script>" }).success).toBe(false);
+  });
+});
+
+describe("national ID numbers", () => {
+  it("requires the right number for the country of residence", () => {
+    expect(personalInfoSchema.safeParse({ ...validPersonal, nationalId: "" }).success).toBe(false);
+    expect(personalInfoSchema.safeParse({ ...validPersonal, nationalId: "12345" }).success).toBe(false);
+    const ng = { ...validPersonal, countryOfResidence: "NG", phoneCountry: "NG", phoneNumber: "0803 123 4567" };
+    expect(personalInfoSchema.safeParse({ ...ng, nationalId: "12345678901" }).success).toBe(true);
+    expect(personalInfoSchema.safeParse({ ...ng, nationalId: "1234" }).success).toBe(false);
+  });
+
+  it("is optional for countries without a configured number", () => {
+    const fr = { ...validPersonal, countryOfResidence: "FR", nationalId: "" };
+    expect(personalInfoSchema.safeParse(fr).success).toBe(true);
   });
 });
 

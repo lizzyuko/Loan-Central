@@ -73,7 +73,7 @@ describe("eligibility indicators are advisory", () => {
     monthlyDebt: "1800",
     debtCurrency: "GBP",
     productCountries: [],
-    requiredDocuments: ["government_id"],
+    requiredDocuments: ["government_id_front"],
     uploadedDocumentTypes: [],
   };
 

@@ -24,6 +24,8 @@ import { verifyTurnstile } from "@/lib/turnstile/verify";
 import { applicationSubmissionSchema, CONSENT_KEYS, toE164, type ApplicationSubmission } from "@/lib/validation/application";
 import { hashPassword, newPasswordSchema, verifyPassword } from "@/lib/auth/password";
 import { DEFAULT_REQUIRED_DOCUMENTS } from "@/config/documents";
+import { checkNationalId, maskNationalId, nationalIdSpec } from "@/config/national-ids";
+import { encrypt } from "@/lib/security/crypto";
 import { toMonthlyIncome } from "./income";
 import { generateReference } from "./reference";
 import type { SubmitApplicationResult } from "./submit-types";
@@ -203,6 +205,13 @@ async function resolveAccount(email: string, password: string): Promise<{ ok: tr
   return { ok: true, account: { kind: "existing", applicantId: existing.id } };
 }
 
+/** Encrypted ID number + display-safe hint (already validated by the schema). */
+function nationalIdColumns(country: string, raw: string | undefined) {
+  const result = checkNationalId(country, raw);
+  if (!result.ok || !result.value) return {};
+  return { nationalIdType: nationalIdSpec(country).type, nationalIdMasked: maskNationalId(result.value), nationalIdEncrypted: encrypt(result.value) };
+}
+
 async function checkDocuments(
   input: ApplicationSubmission,
   productRequired: string[] | undefined,
@@ -290,6 +299,7 @@ async function persist(
         status: "SUBMITTED",
         country: address.country,
         idempotencyKey: input.idempotencyKey,
+        ...nationalIdColumns(personal.countryOfResidence, personal.nationalId),
       })
       .returning({ id: applications.id });
     if (!application) throw new Error("Application insert failed");

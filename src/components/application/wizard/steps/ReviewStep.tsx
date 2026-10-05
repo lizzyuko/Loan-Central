@@ -8,6 +8,7 @@ import { Checkbox, Field } from "@/components/ui/Field";
 import { PASSWORD_HINT, PasswordInput } from "@/components/forms/PasswordAuthForms";
 import { Turnstile, type TurnstileHandle } from "@/components/forms/Turnstile";
 import { countryName, getCountry } from "@/config/countries";
+import { maskNationalId, nationalIdSpec, normalizeNationalId } from "@/config/national-ids";
 import { formatMoney } from "@/config/currencies";
 import { EMPLOYMENT_STATUS_LABELS, INCOME_FREQUENCY_LABELS, LOAN_PURPOSES, REPAYMENT_FREQUENCY_LABELS } from "@/config/site";
 import { LOAN_DISCLAIMER } from "@/content/legal";
@@ -154,6 +155,10 @@ export function ReviewStep({
           <Row label="Email" value={personal.email} />
           <Row label="Phone" value={phone} />
           <Row label="Country of residence" value={countryName(personal.countryOfResidence)} />
+          <Row
+            label={nationalIdSpec(personal.countryOfResidence).label}
+            value={personal.nationalId ? maskNationalId(normalizeNationalId(personal.nationalId)) : nationalIdSpec(personal.countryOfResidence).required ? "Please re-enter it in “About you”" : ""}
+          />
           {personal.nationality && <Row label="Nationality" value={countryName(personal.nationality)} />}
         </Section>
       )}

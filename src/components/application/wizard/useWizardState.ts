@@ -47,7 +47,9 @@ export function useWizardState() {
 
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, savedAt: Date.now() }));
+      // Sensitive identifiers stay in memory only.
+      const personal = state.data.personal ? { ...state.data.personal, nationalId: "" } : undefined;
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, data: { ...state.data, personal }, savedAt: Date.now() }));
     } catch {
       // Storage full or disabled: progress simply won't survive a refresh.
     }

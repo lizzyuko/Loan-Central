@@ -146,8 +146,11 @@ export async function getApplicationDetail(id: string) {
     uploadedDocumentTypes: docs.map((d) => d.documentType),
   });
 
+  // The encrypted ID number is only decrypted through the audited reveal action.
+  const { nationalIdEncrypted, ...application } = row.application;
   return {
     ...row,
+    application: { ...application, hasNationalId: Boolean(nationalIdEncrypted) },
     documents: docs,
     documentLabels: Object.fromEntries(docTypes.map((t) => [t.key, t.label])) as Record<string, string>,
     events,

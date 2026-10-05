@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AddAdminForm, AdminRowForm, ResendInviteButton } from "@/components/admin/SettingsForms";
+import { AddAdminForm, AdminRowForm, DeleteAdminButton, ResendInviteButton } from "@/components/admin/SettingsForms";
 import { Badge } from "@/components/ui/Feedback";
 import { listAdmins } from "@/lib/admin/settings";
 import { requireAdminPage } from "@/lib/auth/admin";
@@ -56,6 +56,7 @@ export default async function AdminsPage() {
                   <td>
                     <AdminRowForm adminId={a.id} role={a.role} isActive={a.isActive} isSelf={a.id === me.id} />
                     {a.isActive && !a.activated && <ResendInviteButton adminId={a.id} />}
+                    {a.id !== me.id && <DeleteAdminButton adminId={a.id} name={a.name} />}
                   </td>
                 </tr>
               ))}

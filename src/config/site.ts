@@ -5,7 +5,7 @@ export const siteConfig = {
   tagline: "Find loan options that fit your needs.",
   description:
     "Apply once and let the Loan Central team review your application and the options that may be available to you. Submitting an application does not guarantee approval or a loan offer.",
-  supportEmail: "support@loancentral.example",
+  supportEmail: "support@loancentral.site",
   /** Shown on the confirmation screen and FAQ. Keep it honest. */
   typicalReviewTime: "3 to 5 business days",
   locale: "en",

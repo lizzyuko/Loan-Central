@@ -5,9 +5,14 @@
  */
 export const DEFAULT_DOCUMENT_TYPES = [
   {
-    key: "government_id",
-    label: "Government-issued ID",
-    description: "Passport, national ID card or driving licence. All corners visible.",
+    key: "government_id_front",
+    label: "Government-issued ID (front)",
+    description: "The front of your passport photo page, national ID card or driving licence. All corners visible.",
+  },
+  {
+    key: "government_id_back",
+    label: "Government-issued ID (back)",
+    description: "The back of your national ID card or driving licence. Not needed for a passport.",
   },
   {
     key: "proof_of_income",
@@ -34,4 +39,12 @@ export const DEFAULT_DOCUMENT_TYPES = [
 export const OTHER_DOCUMENT_TYPE = "other";
 
 /** Required when no product (or no product configuration) applies. */
-export const DEFAULT_REQUIRED_DOCUMENTS = ["government_id", "proof_of_income"];
+export const DEFAULT_REQUIRED_DOCUMENTS = ["government_id_front", "proof_of_income"];
+
+/**
+ * Optional uploads shown next to a required one (e.g. the back of an ID card
+ * alongside the front). Optional because passports have no back.
+ */
+export const COMPANION_DOCUMENTS: Record<string, string> = {
+  government_id_front: "government_id_back",
+};

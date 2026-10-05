@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, count, desc, eq, sql, type SQL } from "drizzle-orm";
+import { asc, count, desc, eq, sql, type SQL, and, isNotNull } from "drizzle-orm";
 import type { z } from "zod";
 import { getDb } from "@/db";
 import { isUniqueViolation } from "@/db/errors";
@@ -59,17 +59,39 @@ export async function updateAdmin(by: CurrentAdmin, input: z.output<typeof admin
     throw new SettingsError("You can't change your own role or deactivate yourself.");
   }
   const db = getDb();
-  if (input.role !== "SUPER_ADMIN" || !input.isActive) {
-    // Never remove the last active super admin.
-    const supers = await db.select({ id: admins.id }).from(admins).where(eq(admins.role, "SUPER_ADMIN"));
-    const target = await db.select({ role: admins.role, isActive: admins.isActive }).from(admins).where(eq(admins.id, input.adminId));
-    if (target[0]?.role === "SUPER_ADMIN" && target[0].isActive && supers.length <= 1) {
-      throw new SettingsError("At least one active super admin is required.");
-    }
-  }
+  if (input.role !== "SUPER_ADMIN" || !input.isActive) await assertNotLastSuperAdmin(input.adminId);
   await db.update(admins).set({ role: input.role, isActive: input.isActive }).where(eq(admins.id, input.adminId));
   if (!input.isActive) await revokeAllSessions("admin", input.adminId);
   await recordAudit({ actor: actor(by), action: "admin.updated", targetType: "admin", targetId: input.adminId, metadata: { role: input.role, isActive: input.isActive } });
+}
+
+/** Never leave the system without an active super admin who can sign in. */
+async function assertNotLastSuperAdmin(adminId: string) {
+  const db = getDb();
+  const [target] = await db.select({ role: admins.role, isActive: admins.isActive }).from(admins).where(eq(admins.id, adminId));
+  if (target?.role !== "SUPER_ADMIN" || !target.isActive) return;
+  const activeSupers = await db
+    .select({ id: admins.id })
+    .from(admins)
+    .where(and(eq(admins.role, "SUPER_ADMIN"), eq(admins.isActive, true), isNotNull(admins.passwordHash)));
+  if (activeSupers.filter((a) => a.id !== adminId).length === 0) {
+    throw new SettingsError("At least one active super admin is required.");
+  }
+}
+
+/**
+ * Permanently deletes an administrator. Their sessions and invite tokens go
+ * with them; their history (notes, payments, audit entries) is kept and shown
+ * as "former admin".
+ */
+export async function deleteAdmin(by: CurrentAdmin, adminId: string) {
+  if (adminId === by.id) throw new SettingsError("You can't delete your own account.");
+  const db = getDb();
+  const [target] = await db.select({ email: admins.email, role: admins.role }).from(admins).where(eq(admins.id, adminId));
+  if (!target) throw new SettingsError("Administrator not found.");
+  await assertNotLastSuperAdmin(adminId);
+  await recordAudit({ actor: actor(by), action: "admin.deleted", targetType: "admin", targetId: adminId, metadata: { role: target.role } });
+  await db.delete(admins).where(eq(admins.id, adminId));
 }
 
 // --- Loan products --------------------------------------------------------------

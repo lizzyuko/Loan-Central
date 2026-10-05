@@ -10,7 +10,7 @@ import { saveLoanSettings } from "@/lib/loans/settings";
 import { loanSettingsSchema } from "@/lib/validation/loans";
 import { AuthError, requireAdmin } from "@/lib/auth/admin";
 import type { Permission } from "@/lib/auth/permissions";
-import { createAdmin, resendInvite, saveDocumentType, saveProduct, SettingsError, updateAdmin } from "@/lib/admin/settings";
+import { createAdmin, deleteAdmin, resendInvite, saveDocumentType, saveProduct, SettingsError, updateAdmin } from "@/lib/admin/settings";
 import { ConfigurationError } from "@/lib/env";
 import { logger } from "@/lib/security/logger";
 import { adminCreateSchema, adminIdSchema, adminUpdateSchema, documentTypeSchema, productSchema } from "@/lib/validation/settings";
@@ -60,6 +60,13 @@ export async function resendInviteAction(raw: unknown) {
   return run("admins.manage", adminIdSchema, raw, "/admin/settings/admins", async (a, i) => {
     const status = await resendInvite(a, i.adminId);
     return status === "SENT" ? "Invitation re-sent." : "The invitation email could not be sent. Check the email configuration.";
+  });
+}
+
+export async function deleteAdminAction(raw: unknown) {
+  return run("admins.manage", adminIdSchema, raw, "/admin/settings/admins", async (a, i) => {
+    await deleteAdmin(a, i.adminId);
+    return "Administrator deleted.";
   });
 }
 

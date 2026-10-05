@@ -43,6 +43,20 @@
       "when": 1791137364153,
       "tag": "0005_loans_and_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791210314684,
+      "tag": "0006_national_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791210320935,
+      "tag": "0007_id_front_back_documents",
+      "breakpoints": true
     }
   ]
 }

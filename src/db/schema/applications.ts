@@ -64,6 +64,12 @@ export const applications = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
     statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
     firstViewedAt: timestamp("first_viewed_at", { withTimezone: true }),
+    /** National ID type for the applicant's country of residence (e.g. NIN, SSN). */
+    nationalIdType: text("national_id_type"),
+    /** Display-safe hint, e.g. "••••6789". */
+    nationalIdMasked: text("national_id_masked"),
+    /** AES-256-GCM encrypted value. Never returned to applicants or emailed. */
+    nationalIdEncrypted: text("national_id_encrypted"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

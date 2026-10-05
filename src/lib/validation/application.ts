@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidPhoneNumber, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/min";
 import { getCountry } from "@/config/countries";
+import { checkNationalId } from "@/config/national-ids";
 import { EMPLOYER_REQUIRED_STATUSES, LOAN_PURPOSE_VALUES } from "@/config/site";
 import { EMPLOYMENT_STATUSES, INCOME_FREQUENCIES, REPAYMENT_FREQUENCIES } from "@/db/schema/enums";
 import {
@@ -46,8 +47,12 @@ export const personalInfoSchema = z
     phoneNumber: requiredText("Phone number", 30),
     countryOfResidence: countryCode("Country of residence"),
     nationality: countryCode("Nationality").optional().or(z.literal("").transform(() => undefined)),
+    /** NIN / SSN / NINO etc. for the country of residence (see config/national-ids). */
+    nationalId: z.string().max(40).optional(),
   })
   .superRefine((v, ctx) => {
+    const id = checkNationalId(v.countryOfResidence, v.nationalId);
+    if (!id.ok) ctx.addIssue({ code: "custom", path: ["nationalId"], message: id.error });
     const age = ageOn(v.dateOfBirth);
     if (age < MIN_APPLICANT_AGE) {
       ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: `You must be at least ${MIN_APPLICANT_AGE} to apply` });

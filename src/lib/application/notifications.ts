@@ -1,5 +1,5 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { getDb } from "@/db";
 import { admins } from "@/db/schema";
 import { countryName } from "@/config/countries";
@@ -33,7 +33,11 @@ export async function notifyApplicationSubmitted(app: SubmittedApplication): Pro
   });
 
   try {
-    const recipients = await getDb().select({ email: admins.email }).from(admins).where(eq(admins.isActive, true));
+    // Only admins who have accepted their invitation (set a password) receive alerts.
+    const recipients = await getDb()
+      .select({ email: admins.email })
+      .from(admins)
+      .where(and(eq(admins.isActive, true), isNotNull(admins.passwordHash)));
     const email = adminNewApplicationEmail({
       reference: app.reference,
       amount: formatMoney(app.amount, app.currency),

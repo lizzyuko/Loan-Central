@@ -178,6 +178,7 @@ There's nothing to set up. Limits are counted in the `rate_limits` table in Post
 | Legal and disclosure copy (versioned; consents record the version) | `src/content/legal.ts` |
 | FAQ | `src/content/faq.ts` |
 | Countries, address formats, banking schemes | `src/config/countries.ts`, `src/config/banking.ts` |
+| National ID numbers per country (NIN, SSN, NINO, SIN, PAN, ...) | `src/config/national-ids.ts` |
 | Currencies | `src/config/currencies.ts` |
 | Loan purposes, upload rules, retention | `src/config/site.ts` |
 | Design tokens (colours, type, spacing, dark mode) | `src/styles/tokens.css` |

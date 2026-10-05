@@ -11,6 +11,7 @@ import {
   requestAccountDetails,
   requestInformation,
   revealAccountDetails,
+  revealNationalId,
   sendCustomMessage,
   type ReviewResult,
 } from "@/lib/admin/review";
@@ -74,6 +75,25 @@ export async function addNoteAction(raw: unknown) {
 }
 
 export type RevealResult = { ok: true; values: Record<string, string> } | { ok: false; error: string };
+
+/** Super-admin-only, audited, rate-limited reveal of the applicant's national ID number. */
+export async function revealNationalIdAction(raw: unknown): Promise<{ ok: true; value: string } | { ok: false; error: string }> {
+  try {
+    const admin = await requireAdmin("identity.reveal");
+    const parsed = applicationIdSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Invalid request." };
+    const limited = await rateLimit("adminSensitiveByAdmin", admin.id);
+    if (!limited.success) return { ok: false, error: "Too many requests. Please wait and try again." };
+    const ctx = await getRequestContext();
+    const value = await revealNationalId(admin, parsed.data.applicationId, ctx.ipHash);
+    if (!value) return { ok: false, error: "No ID number on file." };
+    return { ok: true, value };
+  } catch (err) {
+    if (err instanceof AuthError) return { ok: false, error: err.message };
+    logger.error("ID reveal failed", { err });
+    return { ok: false, error: "Something went wrong." };
+  }
+}
 
 /** Super-admin-only, audited, rate-limited reveal of encrypted account identifiers. */
 export async function revealAccountAction(raw: unknown): Promise<RevealResult> {

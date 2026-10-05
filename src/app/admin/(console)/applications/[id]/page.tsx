@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { ArrowLeft, ArrowSquareOut, CheckCircle, Question, WarningCircle } from "@phosphor-icons/react/ssr";
-import { AccountDetailsReveal } from "@/components/admin/AccountDetailsReveal";
+import { AccountDetailsReveal, NationalIdReveal } from "@/components/admin/AccountDetailsReveal";
+import { nationalIdLabel } from "@/config/national-ids";
 import { NoteForm } from "@/components/admin/NoteForm";
 import { ReviewActions } from "@/components/admin/ReviewActions";
 import { LoanSection } from "@/components/admin/LoanSection";
@@ -105,6 +106,15 @@ export default async function ApplicationDetailPage({ params }: PageProps<"/admi
                 ["Date of birth", `${dateOnly.format(new Date(`${applicant.dateOfBirth}T00:00:00Z`))} (age ${ageOn(applicant.dateOfBirth)})`],
                 ["Country of residence", countryName(applicant.countryOfResidence)],
                 ["Nationality", applicant.nationality ? countryName(applicant.nationality) : null],
+                [
+                  application.nationalIdType ? nationalIdLabel(application.nationalIdType) : "ID number",
+                  application.hasNationalId ? (
+                    <span key="nid" className={styles.inlineReveal}>
+                      <span className={styles.mono}>{application.nationalIdMasked}</span>
+                      {can(admin, "identity.reveal") && <NationalIdReveal applicationId={application.id} />}
+                    </span>
+                  ) : null,
+                ],
                 [
                   "Address",
                   <span key="a">

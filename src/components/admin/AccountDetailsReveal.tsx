@@ -5,7 +5,7 @@ import { Eye, EyeSlash } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Feedback";
 import { BANK_SCHEMES } from "@/config/banking";
-import { revealAccountAction } from "@/app/admin/(console)/applications/[id]/actions";
+import { revealAccountAction, revealNationalIdAction } from "@/app/admin/(console)/applications/[id]/actions";
 
 const LABELS: Record<string, string> = Object.fromEntries(
   Object.values(BANK_SCHEMES)
@@ -68,5 +68,50 @@ export function AccountDetailsReveal({ applicationId }: { applicationId: string 
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Reveals the applicant's national ID number on request; hides again after 60s. */
+export function NationalIdReveal({ applicationId }: { applicationId: string }) {
+  const [value, setValue] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  useEffect(() => {
+    if (!value) return;
+    const t = window.setTimeout(() => setValue(null), 60_000);
+    return () => window.clearTimeout(t);
+  }, [value]);
+
+  if (value) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+        <span style={{ fontFamily: "var(--font-mono)" }}>{value}</span>
+        <Button size="sm" variant="ghost" iconLeft={<EyeSlash size={14} />} onClick={() => setValue(null)}>
+          Hide
+        </Button>
+      </span>
+    );
+  }
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+      <Button
+        size="sm"
+        variant="ghost"
+        iconLeft={<Eye size={14} />}
+        loading={pending}
+        onClick={() =>
+          start(async () => {
+            setError(null);
+            const res = await revealNationalIdAction({ applicationId });
+            if (res.ok) setValue(res.value);
+            else setError(res.error);
+          })
+        }
+      >
+        Reveal
+      </Button>
+      {error && <span style={{ color: "var(--color-danger)", fontSize: "var(--text-xs)" }}>{error}</span>}
+    </span>
   );
 }

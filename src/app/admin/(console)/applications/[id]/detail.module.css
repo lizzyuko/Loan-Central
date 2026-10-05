@@ -266,3 +266,10 @@
 .eventSummary {
   font-size: var(--text-sm);
 }
+
+.inlineReveal {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}

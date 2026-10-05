@@ -12,6 +12,7 @@ export const PERMISSIONS = [
   "documents.view",
   "account_details.view_masked",
   "account_details.reveal",
+  "identity.reveal",
   "loans.manage",
   "payments.void",
   "admins.manage",

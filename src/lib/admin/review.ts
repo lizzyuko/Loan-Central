@@ -229,6 +229,18 @@ export async function recordApplicationViewed(admin: CurrentAdmin, applicationId
 
 export type RevealedAccount = Record<string, string>;
 
+/** Decrypts the national ID number. Caller MUST have checked `identity.reveal`. */
+export async function revealNationalId(admin: CurrentAdmin, applicationId: string, ipHash: string | null): Promise<string | null> {
+  const [row] = await getDb()
+    .select({ enc: applications.nationalIdEncrypted, type: applications.nationalIdType })
+    .from(applications)
+    .where(eq(applications.id, applicationId))
+    .limit(1);
+  if (!row?.enc) return null;
+  await recordAudit({ actor: adminActor(admin), action: "identity.revealed", applicationId, targetType: "national_id", metadata: { type: row.type }, ipHash });
+  return decrypt(row.enc);
+}
+
 /** Decrypts account identifiers. Caller MUST have checked `account_details.reveal`. */
 export async function revealAccountDetails(admin: CurrentAdmin, applicationId: string, ipHash: string | null): Promise<RevealedAccount | null> {
   const [row] = await getDb()

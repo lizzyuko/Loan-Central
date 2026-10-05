@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { ADMIN_ROLES, type AdminRole } from "@/db/schema/enums";
@@ -8,6 +9,7 @@ import { ROLE_LABELS } from "@/lib/auth/permissions";
 import {
   createAdminAction,
   resendInviteAction,
+  deleteAdminAction,
   saveDocumentTypeAction,
   saveProductAction,
   updateAdminAction,
@@ -67,6 +69,33 @@ export function AdminRowForm({ adminId, role, isActive, isSelf }: { adminId: str
           </label>
           <Button type="submit" size="sm" variant="secondary" loading={pending}>
             Save
+          </Button>
+        </>
+      )}
+    </ActionForm>
+  );
+}
+
+/** Delete with an inline confirmation step (no browser dialog). */
+export function DeleteAdminButton({ adminId, name }: { adminId: string; name: string }) {
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <Button size="sm" variant="ghost" onClick={() => setConfirming(true)}>
+        Delete
+      </Button>
+    );
+  }
+  return (
+    <ActionForm action={deleteAdminAction} className={styles.inlineRow} toInput={() => ({ adminId })}>
+      {(pending) => (
+        <>
+          <span style={{ fontSize: "var(--text-sm)" }}>Delete {name}? This can&apos;t be undone.</span>
+          <Button type="submit" size="sm" variant="danger" loading={pending}>
+            Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} disabled={pending}>
+            Cancel
           </Button>
         </>
       )}

@@ -115,7 +115,7 @@ const PRODUCTS = [
     minAmount: "1000",
     maxAmount: "50000",
     termOptionsMonths: [6, 12, 24, 36, 48, 60],
-    requiredDocumentTypes: ["government_id", "proof_of_income"],
+    requiredDocumentTypes: ["government_id_front", "proof_of_income"],
     sortOrder: 1,
   },
   {
@@ -127,7 +127,7 @@ const PRODUCTS = [
     minAmount: "5000",
     maxAmount: "250000",
     termOptionsMonths: [12, 24, 36, 48, 60],
-    requiredDocumentTypes: ["government_id", "proof_of_income", "employment_document"],
+    requiredDocumentTypes: ["government_id_front", "proof_of_income", "employment_document"],
     sortOrder: 2,
   },
   {
@@ -139,7 +139,7 @@ const PRODUCTS = [
     minAmount: "1000",
     maxAmount: "80000",
     termOptionsMonths: [12, 24, 36, 60, 84, 120],
-    requiredDocumentTypes: ["government_id", "proof_of_address"],
+    requiredDocumentTypes: ["government_id_front", "proof_of_address"],
     sortOrder: 3,
   },
   {
@@ -151,7 +151,7 @@ const PRODUCTS = [
     minAmount: "3000",
     maxAmount: "100000",
     termOptionsMonths: [12, 24, 36, 48, 60, 72],
-    requiredDocumentTypes: ["government_id", "proof_of_income"],
+    requiredDocumentTypes: ["government_id_front", "proof_of_income"],
     sortOrder: 4,
   },
 ];

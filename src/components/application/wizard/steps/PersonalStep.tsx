@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { countryOptions, getCountry } from "@/config/countries";
+import { nationalIdSpec } from "@/config/national-ids";
 import { personalInfoSchema, type PersonalInfoInput } from "@/lib/validation/application";
 import { StepShell } from "../StepShell";
 import styles from "../Wizard.module.css";
@@ -35,6 +36,7 @@ export function PersonalStep({ defaultValues, defaultCountry, onNext, onBack }: 
       phoneNumber: "",
       countryOfResidence: defaultCountry,
       nationality: "",
+      nationalId: "",
       ...defaultValues,
     },
   });
@@ -48,6 +50,7 @@ export function PersonalStep({ defaultValues, defaultCountry, onNext, onBack }: 
     [countries],
   );
   const phoneCountry = watch("phoneCountry");
+  const idSpec = nationalIdSpec(watch("countryOfResidence"));
   const dial = phoneCountry ? getCountry(phoneCountry)?.dialCode : null;
 
   return (
@@ -129,6 +132,26 @@ export function PersonalStep({ defaultValues, defaultCountry, onNext, onBack }: 
           )}
         </Field>
       </div>
+
+      <Field
+        label={idSpec.label}
+        optional={!idSpec.required}
+        error={errors.nationalId?.message}
+        hint={`${idSpec.hint}. Encrypted and only visible to authorised staff. It isn't saved in this browser, so you'll need to re-enter it if you reload.`}
+      >
+        {({ id, describedBy, invalid }) => (
+          <Input
+            id={id}
+            aria-describedby={describedBy}
+            invalid={invalid}
+            autoComplete="off"
+            spellCheck={false}
+            inputMode={idSpec.inputMode}
+            maxLength={40}
+            {...register("nationalId")}
+          />
+        )}
+      </Field>
     </StepShell>
   );
 }

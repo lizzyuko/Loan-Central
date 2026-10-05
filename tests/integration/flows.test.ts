@@ -59,7 +59,7 @@ describe.skipIf(!RUN)("integration", async () => {
     asBrowser();
     await db.execute(sql`TRUNCATE admins, applicants, applications, loan_products, document_types, audit_logs, communications, rate_limits CASCADE`);
     await db.insert(schema.documentTypes).values([
-      { key: "government_id", label: "ID", description: "ID" },
+      { key: "government_id_front", label: "ID", description: "ID" },
       { key: "proof_of_income", label: "Income", description: "Income" },
     ]);
   });
@@ -69,7 +69,7 @@ describe.skipIf(!RUN)("integration", async () => {
     const rows = await db
       .insert(schema.documents)
       .values(
-        ["government_id", "proof_of_income"].map((t, i) => ({
+        ["government_id_front", "proof_of_income"].map((t, i) => ({
           draftTokenHash: draftHash,
           documentType: t,
           originalFilename: `${t}.pdf`,
@@ -442,6 +442,50 @@ describe.skipIf(!RUN)("integration", async () => {
     expect(d.summary.outstanding).toBe("1170.00");
     const [reopened] = await db.select().from(schema.applications).where(eq(schema.applications.id, app.id));
     expect(reopened!.status).toBe("APPROVED");
+  });
+
+
+  it("only notifies admins who have accepted their invitation", async () => {
+    const { notifyApplicationSubmitted } = await import("@/lib/application/notifications");
+    await makeAdmin("SUPER_ADMIN", "active@test.dev");
+    await makeAdmin("ADMIN", "pending@test.dev", false);
+    const app = (await submit()).created!;
+    sent.length = 0;
+    await notifyApplicationSubmitted(app);
+    const recipients = sent.map((m) => m.to);
+    expect(recipients).toContain("active@test.dev");
+    expect(recipients).not.toContain("pending@test.dev");
+  });
+
+  it("deletes administrators but never yourself or the last super admin", async () => {
+    const { deleteAdmin, SettingsError } = await import("@/lib/admin/settings");
+    const owner = await makeAdmin("SUPER_ADMIN", "owner@test.dev");
+    const staff = await makeAdmin("ADMIN", "staff@test.dev");
+    const me = { id: owner.id, email: owner.email, name: owner.name, role: owner.role, sessionId: "s" };
+
+    await expect(deleteAdmin(me, owner.id)).rejects.toBeInstanceOf(SettingsError);
+    await deleteAdmin(me, staff.id);
+    expect(await db.select().from(schema.admins).where(eq(schema.admins.id, staff.id))).toHaveLength(0);
+
+    // A second super admin can't delete the only other active one.
+    const other = await makeAdmin("SUPER_ADMIN", "other@test.dev");
+    await db.update(schema.admins).set({ isActive: false }).where(eq(schema.admins.id, owner.id));
+    const otherSelf = { id: other.id, email: other.email, name: other.name, role: other.role, sessionId: "s" };
+    await db.update(schema.admins).set({ isActive: true }).where(eq(schema.admins.id, owner.id));
+    await deleteAdmin(otherSelf, owner.id); // owner deletable while "other" remains
+    const third = await makeAdmin("ADMIN", "third@test.dev");
+    await db.update(schema.admins).set({ role: "SUPER_ADMIN" }).where(eq(schema.admins.id, third.id));
+    const thirdSelf = { id: third.id, email: third.email, name: third.name, role: "SUPER_ADMIN" as const, sessionId: "s" };
+    await deleteAdmin(thirdSelf, other.id);
+    await expect(deleteAdmin(otherSelf, third.id)).rejects.toBeInstanceOf(SettingsError);
+  });
+
+  it("stores the national ID encrypted with a masked hint", async () => {
+    const app = (await submit()).created!;
+    const [row] = await db.select().from(schema.applications).where(eq(schema.applications.id, app.id));
+    expect(row!.nationalIdType).toBe("NINO");
+    expect(row!.nationalIdMasked).toBe("••••456C");
+    expect(row!.nationalIdEncrypted).not.toContain("AB123456C");
   });
 
 });
