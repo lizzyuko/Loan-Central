@@ -31,6 +31,7 @@ const REVIEWER: Permission[] = [
   "communications.send",
   "documents.view",
   "account_details.view_masked",
+  "identity.reveal",
   "loans.manage",
 ];
 

@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { DocumentUploadSlot } from "@/components/application/DocumentUploadSlot";
 import { Alert } from "@/components/ui/Feedback";
-import { COMPANION_DOCUMENTS, OTHER_DOCUMENT_TYPE } from "@/config/documents";
+import { OTHER_DOCUMENT_TYPE } from "@/config/documents";
 import { UPLOAD_RULES } from "@/config/site";
 import { StepShell } from "../StepShell";
 import type { UploadedDocument, WizardDocumentType } from "../types";
@@ -20,9 +20,7 @@ interface Props {
 export function DocumentsStep({ documents, requiredTypes, documentTypes, onChange, onNext, onBack }: Props) {
   const [showErrors, setShowErrors] = useState(false);
   const typeMap = new Map(documentTypes.map((t) => [t.key, t]));
-  // Each required type, followed by its optional companion (e.g. ID back), then "other".
-  const withCompanions = requiredTypes.flatMap((k) => (COMPANION_DOCUMENTS[k] ? [k, COMPANION_DOCUMENTS[k]] : [k]));
-  const slots = [...new Set([...withCompanions, OTHER_DOCUMENT_TYPE])].filter((k) => typeMap.has(k) || k === OTHER_DOCUMENT_TYPE);
+  const slots = [...new Set([...requiredTypes, OTHER_DOCUMENT_TYPE])].filter((k) => typeMap.has(k) || k === OTHER_DOCUMENT_TYPE);
   const missing = requiredTypes.filter((t) => !documents.some((d) => d.documentType === t));
   const atLimit = documents.length >= UPLOAD_RULES.maxFilesPerApplication;
 

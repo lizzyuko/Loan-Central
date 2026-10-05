@@ -20,7 +20,7 @@ import {
   loanProducts,
   loanRequests,
 } from "@/db/schema";
-import { DEFAULT_REQUIRED_DOCUMENTS } from "@/config/documents";
+import { DEFAULT_REQUIRED_DOCUMENTS, withRequiredCompanions } from "@/config/documents";
 import { evaluateIndicators, type Indicator } from "@/lib/application/eligibility";
 
 /**
@@ -132,7 +132,7 @@ export async function getApplicationDetail(id: string) {
       ),
   ]);
 
-  const requiredDocuments = row.product?.requiredDocumentTypes.length ? row.product.requiredDocumentTypes : DEFAULT_REQUIRED_DOCUMENTS;
+  const requiredDocuments = withRequiredCompanions(row.product?.requiredDocumentTypes.length ? row.product.requiredDocumentTypes : DEFAULT_REQUIRED_DOCUMENTS);
   const indicators: Indicator[] = evaluateIndicators(rules, {
     dateOfBirth: row.applicant.dateOfBirth,
     country: row.application.country,

@@ -9,6 +9,7 @@ import type { ApplicationSubmissionInput, ConsentKey } from "@/lib/validation/ap
 import { WizardProgress } from "./WizardProgress";
 import { guessCountry, useWizardState } from "./useWizardState";
 import { DEFAULT_REQUIRED_DOCUMENTS, STEPS, type WizardDocumentType, type WizardProduct } from "./types";
+import { withRequiredCompanions } from "@/config/documents";
 import { LoanStep } from "./steps/LoanStep";
 import { PersonalStep } from "./steps/PersonalStep";
 import { AddressStep } from "./steps/AddressStep";
@@ -51,7 +52,7 @@ export function ApplicationWizard({ products, documentTypes, initialProductSlug,
   const data = state.data;
   const product = products.find((p) => p.slug === data.loan?.productSlug);
   const requiredDocs = useMemo(() => {
-    const configured = product?.requiredDocumentTypes.length ? product.requiredDocumentTypes : DEFAULT_REQUIRED_DOCUMENTS;
+    const configured = withRequiredCompanions(product?.requiredDocumentTypes.length ? product.requiredDocumentTypes : DEFAULT_REQUIRED_DOCUMENTS);
     return configured.filter((k) => documentTypes.some((t) => t.key === k));
   }, [product, documentTypes]);
 

@@ -59,7 +59,8 @@ describe.skipIf(!RUN)("integration", async () => {
     asBrowser();
     await db.execute(sql`TRUNCATE admins, applicants, applications, loan_products, document_types, audit_logs, communications, rate_limits CASCADE`);
     await db.insert(schema.documentTypes).values([
-      { key: "government_id_front", label: "ID", description: "ID" },
+      { key: "government_id_front", label: "ID front", description: "ID" },
+      { key: "government_id_back", label: "ID back", description: "ID" },
       { key: "proof_of_income", label: "Income", description: "Income" },
     ]);
   });
@@ -69,7 +70,7 @@ describe.skipIf(!RUN)("integration", async () => {
     const rows = await db
       .insert(schema.documents)
       .values(
-        ["government_id_front", "proof_of_income"].map((t, i) => ({
+        ["government_id_front", "government_id_back", "proof_of_income"].map((t, i) => ({
           draftTokenHash: draftHash,
           documentType: t,
           originalFilename: `${t}.pdf`,
@@ -123,7 +124,7 @@ describe.skipIf(!RUN)("integration", async () => {
     expect(app.reference).toMatch(/^LC-\d{4}-\d{6}$/);
 
     const docs = await db.select().from(schema.documents).where(eq(schema.documents.applicationId, app.id));
-    expect(docs).toHaveLength(2);
+    expect(docs).toHaveLength(3);
     expect(docs.every((d) => d.status === "ATTACHED" && d.draftTokenHash === null)).toBe(true);
     expect(await db.select().from(schema.consents).where(eq(schema.consents.applicationId, app.id))).toHaveLength(4);
     expect(await db.select().from(schema.applicationEvents).where(eq(schema.applicationEvents.applicationId, app.id))).toHaveLength(1);

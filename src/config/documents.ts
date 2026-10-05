@@ -12,7 +12,7 @@ export const DEFAULT_DOCUMENT_TYPES = [
   {
     key: "government_id_back",
     label: "Government-issued ID (back)",
-    description: "The back of your national ID card or driving licence. Not needed for a passport.",
+    description: "The back of your national ID card or driving licence. Using a passport? Upload the page with your signature.",
   },
   {
     key: "proof_of_income",
@@ -42,9 +42,14 @@ export const OTHER_DOCUMENT_TYPE = "other";
 export const DEFAULT_REQUIRED_DOCUMENTS = ["government_id_front", "proof_of_income"];
 
 /**
- * Optional uploads shown next to a required one (e.g. the back of an ID card
- * alongside the front). Optional because passports have no back.
+ * Documents that are always required together with another one: the back of
+ * an ID goes with the front. Products only need to list the front.
  */
 export const COMPANION_DOCUMENTS: Record<string, string> = {
   government_id_front: "government_id_back",
 };
+
+/** Expand a required list so each document is followed by its companion. */
+export function withRequiredCompanions(types: readonly string[]): string[] {
+  return [...new Set(types.flatMap((k) => (COMPANION_DOCUMENTS[k] ? [k, COMPANION_DOCUMENTS[k]] : [k])))];
+}

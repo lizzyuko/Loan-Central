@@ -102,3 +102,12 @@ describe("references", () => {
     expect(refs.size).toBeGreaterThan(45);
   });
 });
+
+describe("required documents", () => {
+  it("always requires the back of an ID together with the front", async () => {
+    const { withRequiredCompanions, DEFAULT_REQUIRED_DOCUMENTS } = await import("@/config/documents");
+    expect(withRequiredCompanions(["government_id_front", "proof_of_income"])).toEqual(["government_id_front", "government_id_back", "proof_of_income"]);
+    expect(withRequiredCompanions(DEFAULT_REQUIRED_DOCUMENTS)).toContain("government_id_back");
+    expect(withRequiredCompanions(["proof_of_address"])).toEqual(["proof_of_address"]);
+  });
+});

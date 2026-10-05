@@ -23,7 +23,7 @@ import type { RequestContext } from "@/lib/security/request";
 import { verifyTurnstile } from "@/lib/turnstile/verify";
 import { applicationSubmissionSchema, CONSENT_KEYS, toE164, type ApplicationSubmission } from "@/lib/validation/application";
 import { hashPassword, newPasswordSchema, verifyPassword } from "@/lib/auth/password";
-import { DEFAULT_REQUIRED_DOCUMENTS } from "@/config/documents";
+import { DEFAULT_REQUIRED_DOCUMENTS, withRequiredCompanions } from "@/config/documents";
 import { checkNationalId, maskNationalId, nationalIdSpec } from "@/config/national-ids";
 import { encrypt } from "@/lib/security/crypto";
 import { toMonthlyIncome } from "./income";
@@ -242,7 +242,7 @@ async function checkDocuments(
   // Required documents = product config (or defaults), limited to active types.
   const activeTypes = await db.select({ key: documentTypes.key }).from(documentTypes).where(eq(documentTypes.isActive, true));
   const active = new Set(activeTypes.map((t) => t.key));
-  const required = (productRequired?.length ? productRequired : DEFAULT_REQUIRED_DOCUMENTS).filter((k) => active.has(k));
+  const required = withRequiredCompanions(productRequired?.length ? productRequired : DEFAULT_REQUIRED_DOCUMENTS).filter((k) => active.has(k));
   const missing = required.filter((k) => !uploaded.some((d) => d.documentType === k));
   if (missing.length > 0) {
     return { ok: false, error: "Please upload all required documents before submitting." };

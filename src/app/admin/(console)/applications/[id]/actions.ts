@@ -76,7 +76,7 @@ export async function addNoteAction(raw: unknown) {
 
 export type RevealResult = { ok: true; values: Record<string, string> } | { ok: false; error: string };
 
-/** Super-admin-only, audited, rate-limited reveal of the applicant's national ID number. */
+/** Audited, rate-limited reveal of the applicant's national ID number (admins and super admins). */
 export async function revealNationalIdAction(raw: unknown): Promise<{ ok: true; value: string } | { ok: false; error: string }> {
   try {
     const admin = await requireAdmin("identity.reveal");

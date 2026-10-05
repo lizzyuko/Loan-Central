@@ -1,8 +1,8 @@
--- Split the single government ID upload into front (required) and back (optional).
+-- Split the single government ID upload into front and back (both required).
 INSERT INTO "document_types" ("key", "label", "description", "is_active", "sort_order")
 VALUES
   ('government_id_front', 'Government-issued ID (front)', 'The front of your passport photo page, national ID card or driving licence. All corners visible.', true, 0),
-  ('government_id_back', 'Government-issued ID (back)', 'The back of your national ID card or driving licence. Not needed for a passport.', true, 1)
+  ('government_id_back', 'Government-issued ID (back)', 'The back of your national ID card or driving licence. Using a passport? Upload the page with your signature.', true, 1)
 ON CONFLICT ("key") DO NOTHING;
 --> statement-breakpoint
 UPDATE "loan_products"
